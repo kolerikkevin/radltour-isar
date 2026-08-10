@@ -210,7 +210,7 @@
      Handy mit krummem Faktor hochskaliert und war kaum zu lesen. Gleiche
      Schriftfamilie wie im Rest, nur eben scharf. */
   #bilanz{
-    position:absolute;left:50%;bottom:4%;transform:translateX(-50%);
+    position:absolute;left:50%;bottom:calc(var(--leiste,0px) + 3%);transform:translateX(-50%);
     width:94%;max-width:452px;z-index:4;pointer-events:none;display:none;
     font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     color:#d8ccae;text-align:center;line-height:1.35;
@@ -234,6 +234,15 @@
     font-size:9px;padding:2px 6px 4px;opacity:0;transition:opacity .25s;
   }
   #bilanzSumme.voll{color:#ffd97a}
+  /* Sehr flache Fenster — Handy quer mit sichtbarer Adressleiste — haben unten
+     kaum Platz. Dann rückt die Bilanz enger zusammen, statt sich unter die
+     Bedienleiste zu schieben. */
+  @media (max-height:430px){
+    #bilanzKopf{font-size:8px;padding:3px 8px;margin-bottom:2px}
+    #bilanzGrid{font-size:7px;padding:3px 8px 2px;column-gap:8px}
+    #bilanzSumme{font-size:8px;padding:2px 8px 3px}
+    #bilanz{bottom:calc(var(--leiste,0px) + 2%)}
+  }
   /* Die Namensschilder der Funde aus demselben Grund wie die Anweisungszeile
      als echte Schrift: Im Canvas werden sie am Handy mit krummem Faktor
      hochgezogen und fransen aus. Sie sitzen prozentual auf dem Bild, damit
@@ -253,7 +262,8 @@
      auf dem hellen Kiesweg lesbar bleibt. */
   #veil{position:absolute;inset:0;display:none;align-items:center;justify-content:flex-end;
         flex-direction:column;background:linear-gradient(to top,rgba(6,9,6,.62),rgba(6,9,6,0) 34%);
-        z-index:5;cursor:pointer;text-align:center;padding:0 0 6%;line-height:normal}
+        z-index:5;cursor:pointer;text-align:center;line-height:normal;
+        padding:0 0 calc(var(--leiste,0px) + 6%)}
   #veil h1,#veil p{display:none}
   #veil.on{display:flex}
   #veil h1{font-size:clamp(15px,5.4vw,26px);letter-spacing:2px;color:#ffe9a8;
@@ -2628,16 +2638,17 @@ function addLabel(x,y,text,col){
 /* Schwung-Anzeige: eine Kette aus Blättern, kein Punktezähler */
 function drawChain(){
   if(G.chain<2) return;
+  const frei=ueberdeckung();          // die Leiste verdeckt unten ein Stück
   const a=Math.min(1,G.chainT*1.2);
   ctx.globalAlpha=a;
   const n=Math.min(G.chain,14);
   for(let i=0;i<n;i++){
-    const x=16+i*9, y=H-52+Math.sin(G.t*5-i*0.5)*1.6;
+    const x=16+i*9, y=H-52-frei+Math.sin(G.t*5-i*0.5)*1.6;
     const c=i<4?'#9fd07a':(i<8?'#d8e07a':'#ffd45c');
     oval(x,y,3.4,2.4,c); R(x-1,y-4,2,3,'#4f7a38');
   }
   ctx.font='bold 10px ui-monospace, Menlo, monospace';
-  ctx.fillStyle='#ffe9a8'; ctx.fillText('SCHWUNG ×'+G.chain,16,H-60);
+  ctx.fillStyle='#ffe9a8'; ctx.fillText('SCHWUNG ×'+G.chain,16,H-60-frei);
   ctx.globalAlpha=1;
 }
 const labelsEl=document.getElementById('labels');
@@ -4426,7 +4437,10 @@ function wahlFelder(){
   f.push({k:'neu',t:T('w_neu'),s:T('w_neu_s')});
   f.push({k:'teilen',t:T('w_teilen'),s:T('w_teilen_s')});
   const bw=Math.floor((W-24-(f.length-1)*8)/f.length);
-  f.forEach((o,i)=>{ o.x=12+i*(bw+8); o.w=bw; o.y=H-64; o.h=40; });
+  /* Über der Bedienleiste bleiben: Wer im Browser mit Adressleiste spielt,
+     hat unten weniger Bild — dann rücken die Felder entsprechend hoch. */
+  const frei=ueberdeckung();
+  f.forEach((o,i)=>{ o.x=12+i*(bw+8); o.w=bw; o.y=H-64-frei; o.h=40; });
   return f;
 }
 function teilen(){
@@ -4683,6 +4697,18 @@ document.getElementById('mute').onclick=function(){
    typisch —, bekommt ein Pixel drei Gerätepixel und der nächste nur zwei.
    Feine gemalte Strukturen zerfallen dadurch. Deshalb bekommt das Bild nur
    ganze Faktoren; was übrig bleibt, ist schmaler schwarzer Rand. */
+/* Am Handy quer liegt die Bedienleiste über dem unteren Bildrand, damit das
+   Bild nicht schrumpft. Wie weit sie hineinragt, hängt davon ab, ob der
+   Browser gerade seine Adressleiste zeigt — und das ändert sich beim Scrollen.
+   Deshalb wird es gemessen und als CSS-Variable hinterlegt; alles, was unten
+   im Bild sitzt, hält sich daran. */
+function leisteMessen(){
+  const ui=document.getElementById('ui'), c=cv&&cv.getBoundingClientRect();
+  if(!ui||!c||!c.height) return;
+  const u=ui.getBoundingClientRect();
+  const drueber=Math.max(0,Math.round(c.bottom-u.top));
+  document.documentElement.style.setProperty('--leiste',drueber+'px');
+}
 function ganzzahligPassen(){
   const fr=document.getElementById('frame');
   if(!fr) return;
@@ -4715,6 +4741,7 @@ function ganzzahligPassen(){
        bringt. */
     stufe(Math.max(2,Math.min(STUFE_MAX(),Math.round(roh*dpr/480))));
   }
+  leisteMessen();
 }
 /* Wie fein darf intern gerastert werden? Das hängt davon ab, was das Gerät
    schafft — deshalb wird es nicht geraten, sondern gemessen: Läuft es ein
@@ -4762,6 +4789,12 @@ function stufe(k){
 // Nach einer echten Größenänderung darf das Gerät sich neu beweisen
 addEventListener('resize',()=>{ abgestuft=false; stufeDach=0; ganzzahligPassen(); });
 addEventListener('orientationchange',()=>setTimeout(ganzzahligPassen,120));
+/* Die Adressleiste blendet sich beim Scrollen ein und aus — dann wandert der
+   untere Bildrand, und alles Untere muss mitgehen. */
+addEventListener('scroll',leisteMessen,{passive:true});
+if(window.visualViewport){ visualViewport.addEventListener('resize',leisteMessen);
+                           visualViewport.addEventListener('scroll',leisteMessen); }
+setInterval(leisteMessen,700);
 if(window.visualViewport) visualViewport.addEventListener('resize',ganzzahligPassen);
 ganzzahligPassen();
 spracheAnwenden();
