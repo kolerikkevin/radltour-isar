@@ -89,6 +89,20 @@
   /* Der Hinweis ist ein eigener Schritt: nach dem Drehen, vor dem Titelbild.
      Unten als Balken ging er im Bild unter — hier kommt niemand daran vorbei. */
   #home{display:none}
+  /* Wird das Spiel aus einer App heraus geöffnet — Reddit, Instagram,
+     Facebook, WhatsApp —, läuft es in deren eingebautem Browser. Der lässt
+     kein Vollbild zu und behält seine eigenen Leisten. Ein Hinweis einmal am
+     Anfang, wegtippbar, mehr nicht. */
+  #app{display:none}
+  #app.on{
+    display:flex;position:fixed;inset:0;z-index:115;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:#07070f;color:#cfc2e8;text-align:center;padding:24px;
+  }
+  #app h2{font-size:15px;color:#ffe066;letter-spacing:.5px;font-weight:normal}
+  #app p{font-size:12px;line-height:1.6;color:#9a9ac8;max-width:26em}
+  #app b{color:#cfc2e8;font-weight:normal}
+  #app .zu{margin-top:8px;border:1px solid #3a3a5a;padding:8px 22px;color:#ffe066;font-size:12px}
   #home.on{
     display:flex;position:fixed;inset:0;z-index:110;
     flex-direction:column;align-items:center;justify-content:center;gap:16px;
@@ -351,6 +365,15 @@
     </div>
     <p>Antippen, auswählen — dann läuft sie wie eine App.</p>
     <div class="zu">so weiterspielen</div>
+  </div>
+  <div id="app">
+    <h2>Im Browser öffnen</h2>
+    <p>Du bist gerade im eingebauten Browser dieser App. Dort bleibt oben und
+       unten eine Leiste stehen, und das Spiel bekommt nur einen Teil vom
+       Bildschirm.</p>
+    <p><b>Oben rechts auf ⋯ tippen und „Im Browser öffnen" wählen</b> — dann
+       hast du das ganze Bild.</p>
+    <div class="zu">trotzdem hier spielen</div>
   </div>
   <div id="stage">
     <canvas id="cv" width="480" height="300"></canvas>
@@ -732,6 +755,23 @@ let bikeBuf=null, flyBuf=null, wespBuf=null;
 let wespT=0;
 let  rennFahrt=null, rennFahrtGain=null;
 let bikeSrc=null, bikeGain=null, rivSrc=null, rivGain=null, garGain=null, wldGain=null, bgtGain=null;
+/* ------------------- Welche Tonspur kann dieser Browser? -----------------
+   Alle Bänder liegen als OGG/Vorbis in der Datei — das kann jeder Browser
+   außer Safari vor Version 17. Auf älteren iPhones und Macs lief das Spiel
+   deshalb völlig stumm, ohne dass irgendwo etwas kaputt aussah.
+   Für diesen Fall liegen dieselben Aufnahmen als AAC neben der Seite und
+   werden nur dann nachgeladen. Wer OGG kann, merkt von alldem nichts und
+   lädt auch nichts zusätzlich. */
+const KANN_OGG=(()=>{
+  try{ const a=document.createElement('audio');
+       return !!a.canPlayType && a.canPlayType('audio/ogg; codecs="vorbis"')!==''; }
+  catch(e){ return true; }
+})();
+const TON_ERSATZ={};   // Konstantenname → Datei neben der Seite
+function tonQuelle(uri,name){
+  if(KANN_OGG||!name) return uri;
+  return 'ton/'+name+'.m4a';
+}
 function loopFromData(uri,cb){
   const a=SND.ac;
   const g=a.createGain(); g.gain.value=0; g.connect(SND.master);
@@ -743,21 +783,21 @@ function loopFromData(uri,cb){
 }
 function bikeInit(){
   const a=SND.ac; if(!a||bikeGain) return;
-  bikeGain=loopFromData(BIKE_OGG,  s=>{ bikeSrc=s; });
-  rivGain =loopFromData(RIVER_OGG, s=>{ rivSrc=s; });
-  garGain =loopFromData(GARAGE_OGG,s=>{});
-  wldGain =loopFromData(FOREST_OGG,s=>{});
-  bgtGain =loopFromData(BIERG_OGG, s=>{});
-  fetch(SPLASH_OGG).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
+  bikeGain=loopFromData(tonQuelle(BIKE_OGG,'bike'),  s=>{ bikeSrc=s; });
+  rivGain =loopFromData(tonQuelle(RIVER_OGG,'river'), s=>{ rivSrc=s; });
+  garGain =loopFromData(tonQuelle(GARAGE_OGG,'garage'),s=>{});
+  wldGain =loopFromData(tonQuelle(FOREST_OGG,'forest'),s=>{});
+  bgtGain =loopFromData(tonQuelle(BIERG_OGG,'bierg'), s=>{});
+  fetch(tonQuelle(SPLASH_OGG,'splash')).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
     .then(buf=>{ splashBuf=buf; }).catch(()=>{});
-  fetch(RENN_OGG).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
+  fetch(tonQuelle(RENN_OGG,'renn')).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
     .then(buf=>{ rennBuf=buf; }).catch(()=>{});
   // dasselbe Rollen wie bei Kevin — der Rennradfahrer bekommt es schneller
-  fetch(BIKE_OGG).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
+  fetch(tonQuelle(BIKE_OGG,'bike')).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
     .then(buf=>{ bikeBuf=buf; }).catch(()=>{});
-  fetch(FLY_OGG).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
+  fetch(tonQuelle(FLY_OGG,'fly')).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
     .then(buf=>{ flyBuf=buf; }).catch(()=>{});
-  fetch(WESP_OGG).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
+  fetch(tonQuelle(WESP_OGG,'wesp')).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b))
     .then(buf=>{ wespBuf=buf; }).catch(()=>{});
 }
 function ambSet(name,gain,freq){
@@ -3423,6 +3463,12 @@ function spracheAnwenden(){
   const h2=document.querySelector('#heft h2'); if(h2) h2.textContent=T('heft_titel');
   const dh=document.querySelector('#dreh h2'), dp=document.querySelector('#dreh p');
   if(dh) dh.textContent=T('quer_h'); if(dp) dp.textContent=T('quer_p');
+  const ah=document.querySelector('#app h2'), ap=document.querySelectorAll('#app p'),
+        az=document.querySelector('#app .zu');
+  if(ah) ah.textContent=T('app_h');
+  if(ap[0]) ap[0].textContent=T('app_p1');
+  if(ap[1]) ap[1].innerHTML='<b>'+T('app_p2')+'</b>';
+  if(az) az.textContent=T('app_ok');
   const hh=document.querySelector('#home h2'), hp=document.querySelector('#home p'),
         hz=document.querySelector('#home .zu');
   if(hh) hh.textContent=T('home_h'); if(hp) hp.textContent=T('home_p'); if(hz) hz.textContent=T('home_ok');
@@ -4296,6 +4342,10 @@ const TXT={
   grp_b:'Bäume', grp_s:'Sträucher', grp_n:'Farne', grp_p:'Pflanzen',
   grp_t:'Tiere', grp_v:'Vögel', grp_f:'Falter & Libellen', grp_x:'Fische',
   ch_garage:'Tiefgarage', ch_siedl:'Giesing', ch_isar:'Isarweg', ch_wald:'Perlacher Forst', ch_ziel:'Kugler Alm',
+  app_h:'Im Browser öffnen',
+  app_p1:'Du bist gerade im eingebauten Browser dieser App. Dort bleibt oben und unten eine Leiste stehen, und das Spiel bekommt nur einen Teil vom Bildschirm.',
+  app_p2:'Oben rechts auf ⋯ tippen und „Im Browser öffnen" wählen — dann hast du das ganze Bild.',
+  app_ok:'trotzdem hier spielen',
   cue_ziel:'Sammle unterwegs so viel wie möglich — dein Zauberband schnappt sich alles, was du streifst.',
   cue_tempo_touch:'Schneller wirst du durch schnelles Tippen — hörst du auf, rollst du weiter.',
   cue_tempo_maus:'Schneller wirst du mit Pfeil nach oben oder schnellem Klicken.',
@@ -4374,6 +4424,10 @@ const TXT={
   grp_b:'Trees', grp_s:'Shrubs', grp_n:'Ferns', grp_p:'Flowers',
   grp_t:'Animals', grp_v:'Birds', grp_f:'Butterflies & dragonflies', grp_x:'Fish',
   ch_garage:'Car park', ch_siedl:'Giesing', ch_isar:'Isar path', ch_wald:'Perlacher Forst', ch_ziel:'Kugler Alm',
+  app_h:'Open in your browser',
+  app_p1:'You are in this app\'s built-in browser. It keeps its own bars at the top and bottom, so the game only gets part of the screen.',
+  app_p2:'Tap ⋯ in the top right and choose „Open in browser" — then you get the full picture.',
+  app_ok:'play here anyway',
   cue_ziel:'Collect as much as you can — your magic ribbon grabs whatever you brush past.',
   cue_tempo_touch:'Tap fast to speed up — stop tapping and you keep rolling.',
   cue_tempo_maus:'Speed up with the up arrow, or by clicking fast.',
@@ -4620,7 +4674,23 @@ const STANDALONE = window.navigator.standalone===true
          || window.matchMedia('(display-mode: fullscreen)').matches;
 /* Er kommt einmal pro Sitzung, nicht ein für alle Mal: Wer ihn wegtippt,
    sieht ihn beim nächsten Öffnen wieder — sonst vergisst man, dass es geht. */
+/* Die eingebauten Browser der großen Apps melden sich im Erkennungstext.
+   Reddit und Instagram sind für dieses Spiel die häufigsten Wege. */
+const IN_APP=(()=>{
+  const u=navigator.userAgent||'';
+  return /FBAN|FBAV|FB_IAB|Instagram|Reddit|Line\/|Snapchat|TikTok|Twitter|Pinterest|WhatsApp|MicroMessenger|GSA\//i.test(u)
+      || (/\bwv\b/.test(u) && /Android/i.test(u));       // Android-WebView allgemein
+})();
+function appHinweis(){
+  if(!IN_APP||G.appWeg) return;
+  document.getElementById('app').classList.add('on');
+}
+document.getElementById('app').addEventListener('click',()=>{
+  G.appWeg=true;
+  document.getElementById('app').classList.remove('on');
+});
 function homeHinweis(){
+  if(IN_APP) return;          // dort führt „Zum Home-Bildschirm" ins Leere
   if(!IOS||STANDALONE) return;
   if(G.homeWeg) return;
   if(hochkant()) return;                 // hochkant hat der Dreh-Hinweis Vorrang
@@ -4877,6 +4947,7 @@ setInterval(leisteMessen,700);
 if(window.visualViewport) visualViewport.addEventListener('resize',ganzzahligPassen);
 ganzzahligPassen();
 spracheAnwenden();
+appHinweis();                               // zuerst: raus aus dem App-Browser
 homeHinweis();                              // vor dem Titelbild, direkt nach dem Drehen
 /* Jede Art wird beim ersten Auftauchen eingefärbt — das ist genau der Moment,
    in dem etwas Neues ins Bild kommt, und ein Hänger dort fällt doppelt auf.
