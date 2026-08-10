@@ -665,8 +665,8 @@ function sfxSplash(){
 function sfxKies(){
   const a=ac(); if(!a) return;
   noiseBurst(0.30,900,4200,0.13,'highpass');      // der erste Griff ins Grobe
-  noiseBurst(3.2,2600,1200,0.075,'bandpass');     // das Knirschen darunter
-  noiseBurst(3.2,180,90,0.055,'lowpass');         // Rumpeln der Steine
+  noiseBurst(2.0,2600,1200,0.075,'bandpass');     // das Knirschen darunter
+  noiseBurst(2.0,180,90,0.055,'lowpass');         // Rumpeln der Steine
   for(let i=0;i<7;i++)                            // einzelne Kiesel am Rahmen
     tone(160+Math.random()*260,0.05,'square',0.014,0.08+i*0.13);
 }
@@ -896,14 +896,14 @@ for(const c of CHAP){
         if(i%64===0){ const lang=(i%192===0), kies=lang&&(i%384===192);
           s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.50),r:lang?range(0.30,0.42):range(0.20,0.32),
                     lang:lang,kies:kies};
-          if(lang) for(let k=1;k<45;k++) if(segments[i+k])
+          if(lang) for(let k=1;k<(kies?20:45);k++) if(segments[i+k])
             segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1,kies:kies};
         } }
       if(c.name==='wald'){ s.gravel=0.20;
         if(i%90===0){ const lang=(i%270===0), kies=lang&&(i%540===270);
           s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.46),r:lang?range(0.28,0.40):range(0.18,0.28),
                     lang:lang,kies:kies};
-          if(lang) for(let k=1;k<40;k++) if(segments[i+k])
+          if(lang) for(let k=1;k<(kies?18:40);k++) if(segments[i+k])
             segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1,kies:kies};
         } }
     }
@@ -1267,15 +1267,21 @@ function renderSegment(seg,pal){
   if(seg.puddle){
     const px1=p1.x+p1.w*seg.puddle.x, w=p1.w*seg.puddle.r;
     if(seg.puddle.kies){
-      /* Loser Kies: kein Spiegel, sondern eine aufgeworfene helle Schüttung
-         mit groben Körnern — man sieht schon von weitem, dass das kein
-         Wasser ist. */
-      oval(px1,p1.y,w,Math.max(1,w*0.22),'#b8ac90');
-      oval(px1,p1.y-Math.max(1,w*0.05),w*0.86,Math.max(1,w*0.15),'#d2c6a6');
-      if(seg.index%2===0){
-        const k=Math.max(1,Math.round(w*0.12));
-        R(px1-w*0.55+((seg.index*29)%Math.max(1,w)),p1.y-k,k,k,'#8f8468');
-        R(px1+w*0.20-((seg.index*17)%Math.max(1,w*0.6)),p1.y-1,k,Math.max(1,k*0.7),'#e6dcc0');
+      /* Loser Kies ist grau und besteht aus vielen kleinen Steinchen — keine
+         Schüttung aus einem Guss. Die Grundfläche ist nur die Bettung, die
+         Körner darüber machen den Kies. Ihre Lage kommt aus der Segmentnummer,
+         damit sie beim Fahren still liegen bleiben statt zu flimmern. */
+      oval(px1,p1.y,w,Math.max(1,w*0.20),'#6f7378');
+      oval(px1,p1.y-Math.max(1,w*0.04),w*0.90,Math.max(1,w*0.15),'#83878d');
+      const kn=Math.max(1,Math.round(w*0.055));          // Korngröße
+      const zahl=Math.max(4,Math.min(26,Math.round(w*0.55)));
+      let z=(seg.index*2654435761)>>>0;
+      const GRAU=['#9aa0a6','#b4bac0','#6a6e74','#c8ced4','#7e838a'];
+      for(let i=0;i<zahl;i++){
+        z=(z*1664525+1013904223)>>>0;
+        const fx=((z>>>8)%1000)/1000, fy=((z>>>18)%1000)/1000;
+        const kx=px1-w+fx*w*2, ky=p1.y-Math.max(1,w*0.18)*fy;
+        R(kx,ky,kn,Math.max(1,Math.round(kn*0.8)),GRAU[(z>>>4)%5]);
       }
     } else {
       oval(px1,p1.y,w,Math.max(1,w*0.20),'#9fc0c2');
@@ -2717,7 +2723,7 @@ function update(dt){
     G.playerX+=(G.slideX-G.playerX)*Math.min(1,dt*3.4);
     G.playerX+=Math.sin(G.t*6.5)*0.055*dt*8;              // Schlingern in der Spur
     // Loser Kies bremst nicht einmal, sondern die ganze Strecke lang
-    if(G.slideKies) G.speed*=1-Math.min(0.7,1.15*dt);
+    if(G.slideKies) G.speed*=1-Math.min(0.7,0.85*dt);
     G.playerX=Math.max(-PATH_LIMIT-0.3,Math.min(PATH_LIMIT+0.3,G.playerX));
     G.armWant=0;
     G.arm+=(0-G.arm)*Math.min(1,dt*9);
@@ -2767,13 +2773,16 @@ function update(dt){
       if(s.puddle.lang){
         /* Lange Stelle: ab jetzt rutscht es. Weder Lenken noch Greifen —
            nur durchgleiten und schauen. */
-        G.slideT=3.6; G.slideX=s.puddle.x;   // in die Rinne gezogen
         G.slideKies=!!s.puddle.kies;
+        /* Im Kies ist man langsamer — bei gleicher Dauer würde sich die
+           Strecke doppelt so lang anfühlen. Deshalb ist das Kiesbett kürzer
+           und der Kontrollverlust entsprechend kürzer getaktet. */
+        G.slideT=G.slideKies?2.0:3.6; G.slideX=s.puddle.x;
         if(G.slideKies){
           /* Im Kies bleibt die Begleitung — es spritzt ja nichts. Dafür
              frisst die lose Schüttung das Tempo, und zwar sofort spürbar. */
           sfxKies();
-          G.speed*=0.62; G.boost=0;
+          G.speed*=0.70; G.boost=0;
           addLabel(W/2,H-72,'Loser Kies — das bremst.','#e0d2a8');
           addParts(W/2+G.playerX*9,H-22,26,'#cfc2a0',6.5,3.4);
           G.shake=Math.max(G.shake,0.95);
