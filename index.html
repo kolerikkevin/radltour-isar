@@ -4451,6 +4451,56 @@ document.getElementById('mute').onclick=function(){
 
 /* ================================= Start ================================= */
 /* Am Touchgerät wird gezogen statt getippt — Hinweis entsprechend umschreiben */
+/* ---------------------- Ganzzahlig skalieren -------------------------
+   Das Spielfeld ist 480×300 Pixel groß. Wird es mit einem krummen Faktor
+   auf den Bildschirm gezogen — am Handy sind 2,8 Gerätepixel je Spielpixel
+   typisch —, bekommt ein Pixel drei Gerätepixel und der nächste nur zwei.
+   Feine gemalte Strukturen zerfallen dadurch. Deshalb bekommt das Bild nur
+   ganze Faktoren; was übrig bleibt, ist schmaler schwarzer Rand. */
+function ganzzahligPassen(){
+  const fr=document.getElementById('frame');
+  if(!fr) return;
+  fr.style.width='';                                  // erst messen, was Platz hätte
+  const roh=fr.getBoundingClientRect().width;
+  if(roh<40) return;
+  const dpr=window.devicePixelRatio||1;
+  const passt=Math.floor(roh*dpr/480+0.02);           // ganze Faktoren, die hineinpassen
+  const k=Math.max(1,passt);
+  const rest=(480*k/dpr)/roh;                         // wie viel Bild bliebe übrig
+  if(rest>=0.90){
+    /* Der Rand ist schmal genug: Wir nehmen den ganzen Faktor. Jeder Spielpixel
+       sitzt dann auf exakt gleich vielen Gerätepixeln — schärfer geht es nicht. */
+    fr.style.width=(480*k/dpr)+'px';
+    cv.style.imageRendering='pixelated';
+    stufe(1);
+  } else {
+    /* Ganzzahlig würde hier zu viel Bild kosten. Dann wird stattdessen intern
+       hochgezeichnet: Das Spielfeld rechnet weiter in 480×300, wird aber um
+       einen ganzen Faktor größer gerastert. Die letzte Anpassung an die
+       Bildschirmbreite ist danach ein winziger, gleichmäßiger Schritt statt
+       einer groben Stufung — das Bild bleibt in voller Größe. */
+    fr.style.width='';
+    cv.style.imageRendering='auto';
+    /* Am Handy höchstens dreifach: Vierfach wären fast 2,3 Millionen Pixel
+       pro Bild, das kostet dort mehr Bilder pro Sekunde als es an Schärfe
+       bringt. */
+    stufe(Math.max(2,Math.min(TOUCH?3:4,Math.round(roh*dpr/480))));
+  }
+}
+/* Interner Vergrößerungsschritt: Der Zeichencode bleibt bei 480×300, die
+   Grundmatrix macht daraus ganze Vielfache. */
+let STUFE=1;
+function stufe(k){
+  if(k===STUFE&&cv.width===W*k) return;
+  STUFE=k;
+  cv.width=W*k; cv.height=H*k;
+  ctx.setTransform(k,0,0,k,0,0);
+  ctx.imageSmoothingEnabled=false;
+}
+addEventListener('resize',ganzzahligPassen);
+addEventListener('orientationchange',()=>setTimeout(ganzzahligPassen,120));
+if(window.visualViewport) visualViewport.addEventListener('resize',ganzzahligPassen);
+ganzzahligPassen();
 document.getElementById('hint').textContent = TOUCH ? T('hint_touch') : T('hint_maus');
 // Der Titeltext bleibt geräteneutral — er stimmt für Maus wie für Daumen.
 document.querySelector('#veil p').innerHTML=TOUCH?T('veil_touch'):T('veil_maus');
