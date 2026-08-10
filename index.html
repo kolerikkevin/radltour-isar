@@ -225,7 +225,7 @@
 <div id="frame">
   <div id="home">
     <div class="sym">↥</div>
-    <h2>Ohne Rahmen spielen</h2>
+    <h2>Ohne Adressleiste spielen</h2>
     <p>Am iPhone lässt sich die Adressleiste im Browser nicht ausblenden.
        Tipp unten auf <b>Teilen</b> und wähl <b>Zum Home-Bildschirm</b> —
        dann startet die Isar-Radltour wie eine App, formatfüllend.</p>
@@ -3425,7 +3425,7 @@ function wahlFelder(){
   const f=[];
   if(offeneAbschnitte().length) f.push({k:'weiter',t:'Fehlende sammeln',s:(108-FOUND.size)+' Arten offen'});
   f.push({k:'neu',t:'Nochmal neu',s:'von vorn losfahren'});
-  f.push({k:'teilen',t:'Teilen',s:'Spiel an einen Freund'});
+  f.push({k:'teilen',t:'Teilen',s:'einem Freund schicken'});
   const bw=Math.floor((W-24-(f.length-1)*8)/f.length);
   f.forEach((o,i)=>{ o.x=12+i*(bw+8); o.w=bw; o.y=H-64; o.h=40; });
   return f;
