@@ -56,15 +56,19 @@
      die Vollbild-Funktion im Browser nicht frei. Der einzige Weg ist „Zum
      Home-Bildschirm", danach startet das Spiel ohne jede Browserleiste.
      Der Hinweis erscheint einmal und lässt sich wegtippen. */
+  /* Der Hinweis ist ein eigener Schritt: nach dem Drehen, vor dem Titelbild.
+     Unten als Balken ging er im Bild unter — hier kommt niemand daran vorbei. */
   #home{display:none}
   #home.on{
-    display:flex;position:absolute;left:8px;right:8px;bottom:8px;z-index:60;
-    gap:10px;align-items:center;
-    background:rgba(10,10,20,.94);border:1px solid #3a3a5a;padding:9px 11px;
-    font-size:11px;line-height:1.5;color:#cfc2e8;
+    display:flex;position:fixed;inset:0;z-index:110;
+    flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    background:#07070f;color:#cfc2e8;text-align:center;padding:24px;
   }
-  #home b{color:#ffe066;font-weight:normal}
-  #home .zu{margin-left:auto;border:1px solid #3a3a5a;padding:4px 9px;color:#8a8ab0;flex:none}
+  #home .sym{font-size:34px;line-height:1}
+  #home h2{font-size:15px;color:#ffe066;letter-spacing:.5px;font-weight:normal}
+  #home p{font-size:12.5px;line-height:1.65;color:#9a9ac8;max-width:32em}
+  #home b{color:#cfc2e8;font-weight:normal}
+  #home .zu{margin-top:6px;border:1px solid #3a3a5a;padding:8px 22px;color:#ffe066;font-size:12px}
   @media (max-width:900px){
     body{padding:0;align-items:center;justify-content:center}
     #frame{max-width:100vw;max-width:min(100vw, calc((100dvh - var(--ui)) * 1.6))}
@@ -220,9 +224,12 @@
 </div>
 <div id="frame">
   <div id="home">
-    <span>Für Vollbild ohne Adressleiste: unten auf <b>Teilen</b> tippen und
-          <b>Zum Home-Bildschirm</b> wählen — dann startet die Radltour wie eine App.</span>
-    <span class="zu">ok</span>
+    <div class="sym">↥</div>
+    <h2>Ohne Rahmen spielen</h2>
+    <p>Am iPhone lässt sich die Adressleiste im Browser nicht ausblenden.
+       Tipp unten auf <b>Teilen</b> und wähl <b>Zum Home-Bildschirm</b> —
+       dann startet die Isar-Radltour wie eine App, formatfüllend.</p>
+    <div class="zu">so weiterspielen</div>
   </div>
   <div id="stage">
     <canvas id="cv" width="480" height="300"></canvas>
@@ -1271,21 +1278,22 @@ function renderSegment(seg,pal){
   if(seg.puddle){
     const px1=p1.x+p1.w*seg.puddle.x, w=p1.w*seg.puddle.r;
     if(seg.puddle.kies){
-      /* Loser Kies ist grau und besteht aus vielen kleinen Steinchen — keine
-         Schüttung aus einem Guss. Die Grundfläche ist nur die Bettung, die
-         Körner darüber machen den Kies. Ihre Lage kommt aus der Segmentnummer,
-         damit sie beim Fahren still liegen bleiben statt zu flimmern. */
-      oval(px1,p1.y,w,Math.max(1,w*0.20),'#6f7378');
-      oval(px1,p1.y-Math.max(1,w*0.04),w*0.90,Math.max(1,w*0.15),'#83878d');
-      const kn=Math.max(1,Math.round(w*0.055));          // Korngröße
-      const zahl=Math.max(4,Math.min(26,Math.round(w*0.55)));
+      /* Ein Kiesbett ist eine durchgehende Bank, kein Fleckenteppich: Deshalb
+         läuft es als Fläche von Segment zu Segment statt als einzelnes Oval —
+         so wächst es beim Fahren zusammen. Hell und mit vielen kleinen Kieseln,
+         damit es nicht nach Asphalt aussieht. */
+      const px2=p2.x+p2.w*seg.puddle.x, w2=p2.w*seg.puddle.r;
+      quad(px1,p1.y,w, px2,p2.y,w2, '#c6c3b8');            // helle Bettung
+      quad(px1,p1.y,w*0.72, px2,p2.y,w2*0.72, '#d6d3c9');  // ausgefahrene Mitte
+      const kn=Math.max(1,Math.round(w*0.035));            // Korngröße
+      const zahl=Math.max(6,Math.min(40,Math.round(w*0.9)));
       let z=(seg.index*2654435761)>>>0;
-      const GRAU=['#9aa0a6','#b4bac0','#6a6e74','#c8ced4','#7e838a'];
+      const KIES=['#eae7de','#b6b2a6','#f2f0e8','#9c988c','#d0ccc0','#fbfaf6'];
       for(let i=0;i<zahl;i++){
         z=(z*1664525+1013904223)>>>0;
-        const fx=((z>>>8)%1000)/1000, fy=((z>>>18)%1000)/1000;
-        const kx=px1-w+fx*w*2, ky=p1.y-Math.max(1,w*0.18)*fy;
-        R(kx,ky,kn,Math.max(1,Math.round(kn*0.8)),GRAU[(z>>>4)%5]);
+        const fx=((z>>>8)%2000)/1000-1, fy=((z>>>19)%1000)/1000;
+        const kx=px1+fx*w, ky=p1.y-Math.max(1,(p1.y-p2.y))*fy;
+        R(kx,ky,kn,kn,KIES[(z>>>5)%6]);
       }
     } else {
       oval(px1,p1.y,w,Math.max(1,w*0.20),'#9fc0c2');
@@ -2667,7 +2675,8 @@ function frame(now){
     applyGrade();
   }
   if(G.paused) drawPause();
-  requestAnimationFrame(frame);
+  homeHinweis();                              // vor dem Titelbild, direkt nach dem Drehen
+requestAnimationFrame(frame);
 }
 /* Pause: Bild friert ein, Ton geht auf null, ein Klick oder P macht weiter */
 function drawPause(){
@@ -3553,8 +3562,8 @@ function drehPruef(){
     if(G.paused) togglePause();
   }
 }
-window.addEventListener('orientationchange',()=>setTimeout(drehPruef,220));
-window.addEventListener('resize',()=>setTimeout(drehPruef,220));
+window.addEventListener('orientationchange',()=>setTimeout(()=>{drehPruef();homeHinweis();},260));
+window.addEventListener('resize',()=>setTimeout(()=>{drehPruef();homeHinweis();},260));
 
 /* Am iPhone kennt der Browser kein Vollbild — dort hilft nur der Weg über
    den Home-Bildschirm. Der Hinweis kommt einmal und merkt sich, dass er weg
@@ -3564,14 +3573,17 @@ const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
 const STANDALONE = window.navigator.standalone===true
          || window.matchMedia('(display-mode: standalone)').matches
          || window.matchMedia('(display-mode: fullscreen)').matches;
+/* Er kommt einmal pro Sitzung, nicht ein für alle Mal: Wer ihn wegtippt,
+   sieht ihn beim nächsten Öffnen wieder — sonst vergisst man, dass es geht. */
 function homeHinweis(){
   if(!IOS||STANDALONE) return;
-  try{ if(localStorage.getItem('radltour.homehint')==='weg') return; }catch(e){}
+  if(G.homeWeg) return;
+  if(hochkant()) return;                 // hochkant hat der Dreh-Hinweis Vorrang
   document.getElementById('home').classList.add('on');
 }
 document.getElementById('home').addEventListener('click',()=>{
+  G.homeWeg=true;
   document.getElementById('home').classList.remove('on');
-  try{ localStorage.setItem('radltour.homehint','weg'); }catch(e){}
 });
 
 /* Am Handy geht es in den Vollbildmodus, sobald man losfährt — sonst frisst
@@ -3579,7 +3591,7 @@ document.getElementById('home').addEventListener('click',()=>{
 function vollbild(){
   const el=document.documentElement;
   if(!hochkantFaehig()) return;
-  if(IOS){ homeHinweis(); return; }        // iOS lässt Vollbild nicht zu
+  if(IOS) return;                          // iOS lässt Vollbild nicht zu
   const f=el.requestFullscreen||el.webkitRequestFullscreen;
   if(f) { try{ f.call(el).catch(()=>{}); }catch(e){} }
 }
