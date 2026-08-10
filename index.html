@@ -95,7 +95,12 @@
      Anfang, wegtippbar, mehr nicht. */
   #app{display:none}
   #app.on{
-    display:flex;position:fixed;inset:0;z-index:115;
+    /* Muss über dem Dreh-Hinweis (120) liegen: Die eingebauten Browser von
+       Instagram und Facebook stehen am iPhone fest im Hochformat. Läge der
+       Hinweis darunter, sähe man ewig „Bitte quer halten", drehte vergeblich
+       und käme nie an den einzigen Ausweg. Weggetippt gibt er den Dreh-
+       Hinweis frei. */
+    display:flex;position:fixed;inset:0;z-index:125;
     flex-direction:column;align-items:center;justify-content:center;gap:14px;
     background:#07070f;color:#cfc2e8;text-align:center;padding:24px;
   }
@@ -4833,7 +4838,7 @@ document.getElementById('heftlist').addEventListener('click',e=>{
 document.getElementById('heftbtn').onclick=openHeft;
 document.getElementById('heftclose').onclick=closeHeft;
 document.getElementById('mute').onclick=function(){
-  SND.on=!SND.on; this.textContent=SND.on?'Ton an':'Ton aus';
+  SND.on=!SND.on; this.textContent=SND.on?T('ton_an'):T('ton_aus');
   if(SND.on) ac();
   for(const k in SND.L) ambSet(k,0);   // beim Ausschalten alle Schichten runterfahren
 };
