@@ -2034,53 +2034,67 @@ function drawRider(){
      zur Spitze hin kleiner und heller. Der Schwung der Bahn hängt an der
      Länge — kurz ist fast gerade, weit ausgeholt hängt durch. */
   if(armOut){
-    /* Startpunkt ist die gemalte Hand des Sprites, nicht die Schulter — der
-       Sprite streckt den Arm ja bereits, das Band setzt dort an. */
-    const shX=cx+side*30, shY=by+47+pedal;
+    /* Der Strahl setzt an der gemalten Hand an. Ihre Lage im Sprite ist
+       nachgemessen: x 68–71, y 18–28 bei 72×104 — Mitte also (34 | 22) vom
+       Sprite-Ursprung. Vorher lag der Ansatz bei y 47, das ist Achselhöhe,
+       und genau so sah es auch aus. Die Hand gehört zum Oberkörper, federt
+       also beim Treten mit. */
+    const shX=cx+side*34, shY=by+22+pedal;
     const tx=Math.round(W/2+G.playerX*9+G.handX), ty=Math.round(H-14+G.handY);
     const dx=tx-shX, dy=ty-shY, dist=Math.hypot(dx,dy);
-    const bogen=Math.min(26,dist*0.20);                        // Durchhang
-    const n=Math.max(8,Math.round(dist/5));
-    const puls=G.t*14;
+    const bogen=Math.min(22,dist*0.16);
     const bahn=t2=>[shX+dx*t2, shY+dy*t2+Math.sin(t2*Math.PI)*bogen];
-    /* Erst eine dunkle Spur als Absetzung: Auf hellem Kies verschwindet ein
-       helles Funkeln sonst, genau wie vorher die Fangmarken. */
-    ctx.globalAlpha=0.34; ctx.lineCap='round';
-    ctx.strokeStyle='#0d1a2c'; ctx.lineWidth=5;
-    ctx.beginPath();
-    for(let i=0;i<=12;i++){ const q=bahn(i/12); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
-    ctx.stroke();
-    /* Darüber der Strahl selbst, in zwei Lagen: ein weicher blauer Faden und
-       darauf die einzelnen Funken. */
-    ctx.globalAlpha=0.42; ctx.strokeStyle='#7fd0ff'; ctx.lineWidth=2.4;
-    ctx.beginPath();
-    for(let i=0;i<=12;i++){ const q=bahn(i/12); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
-    ctx.stroke();
-    ctx.globalAlpha=1;
+    /* Kein Faden, keine Spur, keine Kante: Sonst liest es sich als Band. Es
+       sind einzelne Funken, die um die Bahn herum streuen — je weiter vorn,
+       desto dichter und heller. Jeder trägt sein eigenes Schattenpixel, damit
+       er auch auf hellem Kies steht. */
+    /* Weniger Silbergrau, mehr Gold und Cyan — grau las sich wie Kies. */
+    const FUNK=['#ffffff','#bfe9ff','#5fc8ff','#ffe08a','#ffc846','#ffffff'];
+    const n=Math.max(10,Math.round(dist/4));
     for(let i=0;i<=n;i++){
       const t2=i/n, q=bahn(t2);
-      const fl=0.5+0.5*Math.sin(puls+i*1.9);                  // Funkeln
-      const s=Math.max(1,Math.round((2.4-t2*0.8)*(0.75+fl*0.6)));
-      ctx.globalAlpha=Math.min(1,(0.55+t2*0.45)*(0.6+fl*0.4));
-      R(q[0],q[1],s,s,i%3===0?'#ffffff':(i%3===1?'#dff2ff':'#8fd4ff'));
-      if(i%5===0){                                            // Sternchen quer dazu
-        ctx.globalAlpha*=0.7;
-        R(q[0]-2,q[1],1,1,'#ffffff'); R(q[0]+s+1,q[1],1,1,'#ffffff');
-        R(q[0],q[1]-2,1,1,'#ffffff'); R(q[0],q[1]+s+1,1,1,'#ffffff');
-      }
+      /* Streuung quer zur Bahn, aus dem Index gewürfelt statt zufällig —
+         so bleibt jeder Funke an seinem Platz, statt zu zappeln. */
+      let z=((i*2654435761)^(Math.floor(G.t*7)*40503))>>>0;
+      const quer=(((z>>>9)%1000)/1000-0.5)*(9-t2*5);
+      const laengs=(((z>>>19)%1000)/1000-0.5)*5;
+      const nx=Math.hypot(dx,dy)?-dy/dist:0, ny=dx/dist;
+      const px2=q[0]+nx*quer+(dx/dist)*laengs, py2=q[1]+ny*quer+(dy/dist)*laengs;
+      const fl=0.5+0.5*Math.sin(G.t*16+i*2.1);
+      const s=Math.max(1,Math.round((2.2-t2*0.6)*(0.65+fl*0.7)));
+      const c=FUNK[(z>>>3)%FUNK.length];
+      ctx.globalAlpha=Math.min(1,(0.55+t2*0.45)*(0.55+fl*0.45));
+      if(s>=2) R(px2+1,py2+1,s,s,'#12203a');             // Schatten nur bei den großen
+      R(px2,py2,s,s,c);
     }
     ctx.globalAlpha=1;
-    /* Die Spitze: ein kleiner heller Kern mit Hof — dort greift das Band zu. */
-    const kern=G.brushT>0?3:2;
-    ctx.globalAlpha=0.35; oval(tx,ty,kern*3.4,kern*3.0,'#7fd0ff'); ctx.globalAlpha=1;
-    oval(tx,ty,kern*1.7,kern*1.5,'#d8f2ff');
-    R(tx-1,ty-1,3,3,'#ffffff');
-    if(G.brushT>0){                                           // Treffer: kurzer Blitz
+    /* Die Spitze ist ein vierzackiger Funkelstern, der atmet: Die Zacken
+       wachsen und schrumpfen gegenläufig, dadurch dreht er sich scheinbar,
+       ohne dass irgendetwas rotiert wird. */
+    const pu=0.5+0.5*Math.sin(G.t*7);
+    const lang=Math.round(7+pu*5), kurz=Math.round(4+(1-pu)*4);
+    ctx.globalAlpha=0.22; oval(tx,ty,7,6,'#9fe4ff'); ctx.globalAlpha=1;
+    const zack=(dxx,dyy,len,col)=>{
+      for(let k=0;k<len;k++){
+        const b2=Math.max(1,Math.round((len-k)/2.2));
+        R(tx+dxx*k-(dxx?0:b2/2), ty+dyy*k-(dyy?0:b2/2), dxx?b2:b2, dyy?b2:b2, col);
+      }
+    };
+    zack(1,0,lang,'#ffe08a'); zack(-1,0,lang,'#ffe08a');
+    zack(0,1,Math.round(lang*0.8),'#bfe9ff'); zack(0,-1,Math.round(lang*0.8),'#bfe9ff');
+    // vier kurze Diagonalen dazu: das macht aus dem Kreuz einen Funkelstern
+    for(const d of [[1,1],[1,-1],[-1,1],[-1,-1]]){
+      for(let k=1;k<=kurz-1;k++)
+        R(tx+d[0]*k, ty+d[1]*k, 1,1, k<2?'#ffffff':'#ffe08a');
+    }
+    R(tx-2,ty-2,5,5,'#ffffff');
+    R(tx-1,ty-3,3,7,'#ffffff'); R(tx-3,ty-1,7,3,'#ffffff');
+    if(G.brushT>0){                                       // Treffer: Funkenkranz
       const a2=Math.min(1,G.brushT*4);
-      ctx.globalAlpha=a2*0.8;
-      for(let k=0;k<6;k++){
-        const w2=Math.PI*2*k/6+G.t*3, l=7+k%2*4;
-        R(tx+Math.cos(w2)*l,ty+Math.sin(w2)*l,2,2,'#ffffff');
+      ctx.globalAlpha=a2*0.85;
+      for(let k=0;k<8;k++){
+        const w2=Math.PI*2*k/8+G.t*2.6, l=9+(k%2)*6;
+        R(tx+Math.cos(w2)*l,ty+Math.sin(w2)*l,2,2,k%2?'#ffd76a':'#ffffff');
       }
       ctx.globalAlpha=1;
     }
