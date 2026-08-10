@@ -3425,7 +3425,7 @@ function wahlFelder(){
   const f=[];
   if(offeneAbschnitte().length) f.push({k:'weiter',t:'Fehlende sammeln',s:(108-FOUND.size)+' Arten offen'});
   f.push({k:'neu',t:'Nochmal neu',s:'von vorn losfahren'});
-  f.push({k:'teilen',t:'Teilen',s:'einem Freund schicken'});
+  f.push({k:'teilen',t:'Teilen',s:'einem Spezi schicken'});
   const bw=Math.floor((W-24-(f.length-1)*8)/f.length);
   f.forEach((o,i)=>{ o.x=12+i*(bw+8); o.w=bw; o.y=H-64; o.h=40; });
   return f;
