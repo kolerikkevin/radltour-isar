@@ -946,6 +946,7 @@ const G={
   chapter:'garage', shake:0, flash:0,
   followers:[], hist:[], parts:[], labels:[], flyers:[],
   hand:0, handSide:1, brushT:0, bgX:0, endT:0,
+  haltSeite:0, haltT:0,
   chain:0, chainT:0, chainBest:0, pulse:0, boost:0, labelY:0,
   loot:[], tut:0, gatePulled:false, coachT:0, coachTxt:'', coached:{},
   arm:0, armWant:0, armSide:1, aim:null, aimSp:null, handX:28, handY:-96,
@@ -967,18 +968,57 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>{keys[e.key]=false;});
 const TOUCH=matchMedia('(pointer:coarse)').matches;
 let drag=null;
-cv.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,lean:G.targetLean,sp:G.speedWish};
-  try{cv.setPointerCapture(e.pointerId);}catch(err){} });
-cv.addEventListener('pointermove',e=>{
-  if(!drag) return;
+/* ------------------------- Steuerung am Handy ---------------------------
+   Zwei Zonen statt Ziehen: Wer links auf den Schirm drückt, lehnt sich nach
+   links und greift nach links; rechts entsprechend. Gehalten wird mit dem
+   Daumen, der ohnehin dort liegt.
+
+   Die Weite kommt aus der HALTEDAUER, nicht aus einer Fingerstrecke: kurz
+   antippen streift die Blume dicht am Weg, langes Halten schickt den Arm bis
+   zum Baum außen. Ohne das gaebe es nur "ganz raus", und alles Nahe wuerde
+   ueberfahren. Vom Antippen bis zum vollen Ausschlag vergeht gut eine halbe
+   Sekunde — genug zum Dosieren, kurz genug, um im Vorbeifahren zu treffen.
+
+   Wer auf einer der beiden Seiten von unten nach oben zieht, gibt Tempo.
+   Eine Totzone verhindert, dass ein wackliger Daumen dabei bremst.       */
+const ZONEN=new Map();
+const HALT_VOLL=0.55;       // Sekunden bis zum vollen Ausschlag
+const TEMPO_TOT=12;         // Pixel Totzone, bevor Ziehen aufs Tempo geht
+function zoneAus(){
+  const letzte=[...ZONEN.values()].pop();
+  G.haltSeite = letzte ? letzte.seite : 0;
+  if(!letzte) G.haltT=0;
+}
+cv.addEventListener('pointerdown',e=>{
   const r=cv.getBoundingClientRect();
-  /* Am Handy reicht ein kürzerer Daumenweg für vollen Ausschlag — auf einem
-     kleinen Schirm ist ein Drittel der Breite eine halbe Handbewegung. */
-  const wX=r.width*(TOUCH?0.20:0.30), wY=r.height*(TOUCH?0.32:0.45);
-  G.targetLean=Math.max(-1,Math.min(1,drag.lean+(e.clientX-drag.x)/wX));
-  G.speedWish =Math.max(-1,Math.min(1,drag.sp  +(drag.y-e.clientY)/wY));
+  if(TOUCH){
+    const seite=((e.clientX-r.left) < r.width/2) ? -1 : 1;
+    ZONEN.set(e.pointerId,{seite:seite,y0:e.clientY,sp0:G.speedWish,tempo:false});
+    G.haltT=0; zoneAus();
+  } else {
+    drag={x:e.clientX,y:e.clientY,lean:G.targetLean,sp:G.speedWish};
+  }
+  try{cv.setPointerCapture(e.pointerId);}catch(err){}
 });
-const endDrag=()=>{ drag=null; };
+cv.addEventListener('pointermove',e=>{
+  const r=cv.getBoundingClientRect();
+  if(TOUCH){
+    const z=ZONEN.get(e.pointerId); if(!z) return;
+    const dy=z.y0-e.clientY;
+    if(!z.tempo && Math.abs(dy)<TEMPO_TOT) return;
+    z.tempo=true;
+    G.speedWish=Math.max(-1,Math.min(1, z.sp0 + (dy-(dy>0?TEMPO_TOT:-TEMPO_TOT))/(r.height*0.32)));
+    return;
+  }
+  if(!drag) return;
+  G.targetLean=Math.max(-1,Math.min(1,drag.lean+(e.clientX-drag.x)/(r.width*0.30)));
+  G.speedWish =Math.max(-1,Math.min(1,drag.sp  +(drag.y-e.clientY)/(r.height*0.45)));
+});
+const endDrag=e=>{
+  drag=null;
+  if(e&&e.pointerId!==undefined) ZONEN.delete(e.pointerId); else ZONEN.clear();
+  zoneAus();
+};
 cv.addEventListener('pointerup',endDrag);
 cv.addEventListener('pointercancel',endDrag);
 
@@ -2605,7 +2645,13 @@ function update(dt){
   let lean=G.targetLean;
   if(keys['ArrowLeft']||keys['a']) lean=-1;
   if(keys['ArrowRight']||keys['d']) lean=1;
-  if(!drag&&!(keys['ArrowLeft']||keys['ArrowRight']||keys['a']||keys['d'])) lean=G.targetLean*0.9;
+  /* Gehaltene Zone: der Ausschlag wächst mit der Haltedauer, bis er voll ist. */
+  if(G.haltSeite){
+    G.haltT=(G.haltT||0)+dt;
+    lean=G.haltSeite*Math.min(1,G.haltT/HALT_VOLL);
+  } else if(!drag&&!(keys['ArrowLeft']||keys['ArrowRight']||keys['a']||keys['d'])){
+    lean=G.targetLean*0.9;
+  }
   G.targetLean=lean;
 
   /* Lenken und Greifen sind zwei Dinge auf einer Achse:
@@ -3587,7 +3633,7 @@ document.getElementById('mute').onclick=function(){
 /* ================================= Start ================================= */
 /* Am Touchgerät wird gezogen statt getippt — Hinweis entsprechend umschreiben */
 document.getElementById('hint').textContent = TOUCH
-  ? 'ziehen: seitlich lehnen · hoch/runter = tempo'
+  ? 'links/rechts drücken und halten: lehnen und greifen · nach oben ziehen: tempo'
   : '← → oder ziehen: lehnen · ↑ ↓: tempo';
 // Der Titeltext bleibt geräteneutral — er stimmt für Maus wie für Daumen.
 document.querySelector('#veil p').innerHTML=
@@ -3604,8 +3650,9 @@ veil.addEventListener('click',()=>{
 });
 /* Am Handy steht auf dem Titelbild, wie gefahren wird — und dass es quer geht. */
 if(TOUCH) document.querySelector('#veil p').innerHTML=
-  'Ein Tag an der Isar.<br>Zieh mit dem Daumen zur Seite, dann lehnt sich Kevin '+
-  'und die Hand geht raus.<br>Hoch und runter ziehen macht Tempo.<br>Am besten quer halten.';
+  'Ein Tag an der Isar.<br>Drück links oder rechts auf den Bildschirm — Kevin lehnt sich '+
+  'dorthin und die Hand geht raus.<br>Je länger du hältst, desto weiter.<br>'+
+  'Von unten nach oben ziehen macht Tempo.';
 requestAnimationFrame(frame);
 </script>
 </body>
