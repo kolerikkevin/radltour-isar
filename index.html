@@ -97,12 +97,16 @@
   @media (max-width:900px) and (orientation:landscape){
     :root{ --ui:0px; --pad:0px; }
     #frame{max-width:min(100vw, calc(100dvh * 1.6));margin:0 auto}
+    /* Flach halten: Jeder Pixel Leiste ist ein Pixel weniger Wiese, auf der die
+       Begleitung mitlaufen kann. Der Verlauf beginnt später und ist dünner. */
     #ui{
       position:absolute;left:0;right:0;bottom:0;z-index:30;
-      background:linear-gradient(to top, rgba(6,6,14,.92), rgba(6,6,14,.72) 62%, rgba(6,6,14,0));
-      padding:14px 10px 6px;
-      padding-bottom:calc(6px + env(safe-area-inset-bottom));
+      background:linear-gradient(to top, rgba(6,6,14,.88), rgba(6,6,14,.55) 70%, rgba(6,6,14,0));
+      padding:8px 8px 4px;
+      padding-bottom:calc(4px + env(safe-area-inset-bottom));
     }
+    #bar button{padding:3px 8px;font-size:10px}
+    #bar span{font-size:9.5px}
     #hint{display:none}                 /* die Zeile steht im Bild, wenn sie zählt */
     #bar{margin-top:0;padding-top:0;border-top:none;gap:6px}
     #bar span{opacity:.85}
@@ -865,13 +869,16 @@ const pick=a=>a[Math.floor(rnd()*a.length)];
 const range=(a,b)=>a+rnd()*(b-a);
 
 chapter('garage',()=>{                 // dunkel, kalt, Luxusautos, dann die Rampe
-  addRoad(12, 46,12,0,0);
-  addRoad(18, 40,18, 1.6,0);
-  addRoad(18, 38,18,-1.8,0);
-  addRoad(14, 44,14,0,0);
-  addRoad(30, 78,40,0.6,2.6);
+  /* Gekürzt: Die Übung dauerte über eine halbe Minute, bevor es überhaupt
+     rausging. Alle vier Lehrstücke (zwei Pylonen, Feuerlöscher, Torkette)
+     passen weiter hinein, nur die Strecken dazwischen sind knapper. */
+  addRoad(12, 30,12,0,0);
+  addRoad(18, 26,18, 1.6,0);
+  addRoad(18, 24,18,-1.8,0);
+  addRoad(14, 28,14,0,0);
+  addRoad(26, 44,34,0.6,2.6);
 });
-chapter('gate',()=>{ addRoad(20,80,30,0,1.4); });   // das Tor geht auf
+chapter('gate',()=>{ addRoad(14,34,22,0,1.4); });   // nur der Übergang, kein Abschnitt
 chapter('siedl',()=>{
   addRoad(20,80,20,-1.4,-0.6);
   addRoad(20,70,20, 1.8,0);
@@ -918,7 +925,9 @@ for(const c of CHAP){
       if(i% 8===0) addSprite(i,'lamp',0,{h:3.35});
       if(i% 9===0) addSprite(i,'pillar',(rnd()<0.5?-1:1)*range(2.6,3.2));
     } else if(c.name==='gate'){
-      if(i%10===0) addSprite(i,'lamp',0,{h:3.35});
+      /* Nur im ersten Drittel der Ausfahrt hängen noch Deckenlampen — danach
+         ist man draußen, und draußen hängt nichts mehr über dem Weg. */
+      if(i%10===0 && i < c.from + (c.to-c.from)*0.34) addSprite(i,'lamp',0,{h:3.35});
     } else if(c.name==='siedl'){
       if(i% 9===0) addSprite(i,'hedge',(rnd()<0.5?-1:1)*range(2.3,2.9));
       if(i%17===0) addSprite(i,'house',(rnd()<0.5?-1:1)*range(3.0,3.8),
@@ -2140,7 +2149,24 @@ function drawRider(){
 /* Die Begleitung läuft seitlich neben Kevin mit — jedes Tier in seiner
    eigenen Größe (ein Reh überragt ihn fast, ein Zaunkönig hüpft nebenher).
    Die Großen laufen weiter außen, damit sie ihn nicht verdecken. */
+/* Am Handy quer liegt die Bedienleiste über dem unteren Bildrand — genau dort,
+   wo die Begleitung mitläuft. Wie viel sie verdeckt, wird gemessen und in
+   Bildpunkte umgerechnet; die Tiere rücken um diesen Betrag nach oben, damit
+   sie sichtbar bleiben, statt hinter der Leiste zu verschwinden. */
+let uiDeckung=0, uiGemessen=0;
+function ueberdeckung(){
+  const jetzt=performance.now();
+  if(jetzt-uiGemessen<600) return uiDeckung;
+  uiGemessen=jetzt;
+  const ui=document.getElementById('ui'), c=cv.getBoundingClientRect();
+  if(!ui||!c.height){ uiDeckung=0; return 0; }
+  const u=ui.getBoundingClientRect();
+  const drueber=Math.max(0,c.bottom-u.top);          // 0, wenn die Leiste darunter sitzt
+  uiDeckung=Math.min(48,Math.round(drueber/c.height*H));
+  return uiDeckung;
+}
 function drawFollowers(){
+  const frei=ueberdeckung();
   /* Alles, was du gestreift hast, kommt mit: Rehe und Füchse traben seitlich
      mit, Vögel hüpfen nebenher, Falter kreisen um dich herum. Gezeichnet wird
      mit denselben gemalten Formen wie am Wegrand, nur klein — so erkennt man
@@ -2182,7 +2208,7 @@ function drawFollowers(){
     const out=44+sz*52+row*11;
     const x=W/2+hx*9+sgn*out;
     const gait=Math.sin(G.t*(9-sz*3.5)+i*1.9);
-    const y=H-20-row*7-Math.abs(gait)*(2.4-sz*1.2);
+    const y=H-20-frei-row*7-Math.abs(gait)*(2.4-sz*1.2);
     if(!zeichne(S,x,y,hoehe,sgn<0)) return;
   });
 
@@ -2193,7 +2219,7 @@ function drawFollowers(){
     const ph=G.t*(1.05+i*0.14)+i*2.4;
     const c=Math.cos(ph), s2=Math.sin(ph);
     const x=W/2+hx*9+c*(40+i*6);
-    const y=H-108+s2*11-Math.sin(G.t*3.4+i)*3;    // auf Kopfhöhe, nicht am Rad
+    const y=H-108-Math.round(frei*0.5)+s2*11-Math.sin(G.t*3.4+i)*3;  // auf Kopfhöhe
     const nah=0.72+0.28*s2;                        // vorne größer als hinten
     zeichne(S,x,y,Math.max(4,Math.round(masz(S)*nah)),c<0);
   });
