@@ -199,6 +199,19 @@
     letter-spacing:.02em;padding:5px 12px 6px;text-align:center;white-space:nowrap;
   }
   #coach.on{opacity:1}
+  /* Die Namensschilder der Funde aus demselben Grund wie die Anweisungszeile
+     als echte Schrift: Im Canvas werden sie am Handy mit krummem Faktor
+     hochgezogen und fransen aus. Sie sitzen prozentual auf dem Bild, damit
+     sie bei jeder Fenstergröße an der richtigen Stelle stehen. */
+  #labels{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+  #labels span{
+    position:absolute;transform:translate(-50%,-100%);white-space:nowrap;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-weight:700;
+    font-size:clamp(9px,1.35vw,12px);line-height:1.3;letter-spacing:.02em;
+    padding:2px 6px 3px;background:rgba(8,16,8,.66);
+    border-top:1px solid rgba(150,190,130,.35);
+  }
+  @media (max-width:900px){ #labels span{font-size:clamp(10px,1.9vw,14px)} }
   @media (max-width:900px){ #coach{font-size:clamp(11px,2.1vw,15px);white-space:normal} }
   /* Das Titelbild bringt Titel und Untertitel schon mit — der Schleier hält
      nur noch den Knopf und legt sich unten leicht dunkel darunter, damit er
@@ -266,6 +279,7 @@
   </div>
   <div id="stage">
     <canvas id="cv" width="480" height="300"></canvas>
+    <div id="labels"></div>
     <div id="coach"></div>
     <div id="veil" class="on">
       <h1>RADLTOUR</h1>
@@ -279,10 +293,10 @@
   <div id="ui">
     <div id="hint">← → lehnen und die Hand ausstrecken · ↑ ↓ Tempo · am Handy: ziehen</div>
     <div id="bar">
-      <span>Heftchen <b id="cnt">0</b>/<b id="tot">0</b></span>
+      <span>Sammelheftchen <b id="cnt">0</b>/<b id="tot">0</b></span>
       <span>Begleitung <b id="foll">0</b></span>
       <span>Dabei <b id="loot">0</b></span>
-      <button id="heftbtn">Heftchen</button>
+      <button id="heftbtn">Sammelheftchen</button>
       <button id="pausebtn">Pause</button>
       <button id="weiterbtn" style="display:none">Weitersammeln</button>
       <button id="againbtn" style="display:none">Neue Runde</button>
@@ -293,7 +307,7 @@
     <div id="lupename"></div><div id="lupefakt"></div><div id="lupecr"></div>
     <div id="lupehint">klicken zum Schließen</div></div></div>
   <div id="heft">
-    <h2>Mein Heftchen</h2>
+    <h2>Mein Sammelheftchen</h2>
     <div class="sub" id="heftsub"></div>
     <div id="heftlist"></div>
     <button id="heftclose">zurück</button>
@@ -2228,20 +2242,24 @@ function drawChain(){
   ctx.fillStyle='#ffe9a8'; ctx.fillText('SCHWUNG ×'+G.chain,16,H-60);
   ctx.globalAlpha=1;
 }
+const labelsEl=document.getElementById('labels');
 function drawLabels(dt){
-  ctx.font='bold 10px ui-monospace, Menlo, monospace'; ctx.textAlign='center';
   for(let i=G.labels.length-1;i>=0;i--){
     const l=G.labels[i];
     l.y-=22*dt; l.life-=dt;
-    if(l.life<=0){ G.labels.splice(i,1); continue; }
-    ctx.globalAlpha=Math.min(1,l.life*1.6);
-    const w=Math.round(ctx.measureText(l.t).width)+8;
-    R(l.x-w/2,l.y-9,w,12,'rgba(8,16,8,0.62)');
-    R(l.x-w/2,l.y-9,w,1,'rgba(150,190,130,0.35)');
-    ctx.fillStyle=l.col; ctx.fillText(l.t,Math.round(l.x),Math.round(l.y));
-    ctx.globalAlpha=1;
+    if(l.life<=0){
+      if(l.el) l.el.remove();
+      G.labels.splice(i,1); continue;
+    }
+    if(!l.el){
+      l.el=document.createElement('span');
+      l.el.textContent=l.t; l.el.style.color=l.col;
+      labelsEl.appendChild(l.el);
+    }
+    l.el.style.left=(l.x/W*100).toFixed(2)+'%';
+    l.el.style.top =(l.y/H*100).toFixed(2)+'%';
+    l.el.style.opacity=Math.min(1,l.life*1.6).toFixed(2);
   }
-  ctx.textAlign='left';
 }
 
 /* ============================== Berühren ================================= */
@@ -3235,6 +3253,8 @@ function betreteAbschnitt(i){
 }
 function startEnding(){
   G.coachT=0; G.coachTxt='';        // die Anweisungszeile hat am Ziel nichts verloren
+  for(const l of G.labels) if(l.el) l.el.remove();
+  G.labels.length=0;
   /* Wer es bis hierher geschafft hat, zählt: die Begleitung im Biergarten
      ist eine eigene Auszeichnung — sie überlebt jede Pfütze auf dem Weg. */
   if(!G.tour||G.tourIdx>=((G.tour||[]).length-1)){
@@ -3527,7 +3547,7 @@ function zeilenBilanz(){
             gold: hat===alle.length});
   }
   z.push({t:'Insgesamt '+FOUND.size+' von 108 Arten.',
-          extra: FOUND.size===108?'Das Heftchen ist voll.':'', gold:FOUND.size===108});
+          extra: FOUND.size===108?'Das Sammelheftchen ist voll.':'', gold:FOUND.size===108});
   return (G.bilanz=z);
 }
 const BILANZ_AB=3.4, BILANZ_TAKT=1.15;
@@ -3567,11 +3587,14 @@ function endeLeiste(){
   zeig('pausebtn',false); zeig('weiterbtn',false); zeig('againbtn',false);
   const st=endeStufe(), hint=document.getElementById('hint');
   hint.textContent = st==='bilanz' ? 'Angekommen.'
-    : st==='heftchen' ? 'Das Heftchen blättert gleich auf.'
-    : st==='lesen' ? 'Heftchen — mit „zurück" wieder in den Biergarten.'
+    : st==='heftchen' ? 'Das Sammelheftchen blättert gleich auf.'
+    : st==='lesen' ? 'Sammelheftchen — mit „zurück" wieder in den Biergarten.'
     : 'Such dir was aus.';
 }
 function renderEnding(dt){
+  /* Am Ziel schweigt die Einweisung — auch wenn kurz vorher noch eine Zeile
+     ausgelöst wurde, die sonst über der Bilanz stehen bliebe. */
+  G.coachT=0; G.coachTxt='';
   const heftAuf=document.getElementById('heft').classList.contains('on');
   if(!heftAuf) G.endT+=dt;
   if(heftAuf) G.heftGesehen=true;
