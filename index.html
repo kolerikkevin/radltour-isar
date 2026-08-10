@@ -185,6 +185,21 @@
   #heftclose{align-self:flex-start;margin-top:10px}
   /* Der Titelvorhang liegt exakt über dem Bild, nicht über der Leiste */
   #stage{position:relative;line-height:0}
+  /* Die Anweisungszeile liegt als echte Schrift über dem Bild statt im Canvas.
+     Grund: Das Canvas hat 480 Logikpixel und wird am Handy mit krummem Faktor
+     hochgezogen (1,25 → 2,5 Gerätepixel je Spielpixel). Gezeichnete Buchstaben
+     bekommen dadurch ungleich dicke Striche. Als Text bleibt sie überall
+     gestochen — dieselbe Schriftfamilie, gleiche Anmutung. */
+  #coach{
+    position:absolute;left:50%;bottom:11%;transform:translateX(-50%);
+    max-width:88%;z-index:4;pointer-events:none;opacity:0;transition:opacity .18s;
+    background:rgba(8,14,10,.82);border-top:1px solid rgba(180,210,150,.35);
+    color:#e8f0d8;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-weight:700;font-size:clamp(10px,1.55vw,13px);line-height:1.45;
+    letter-spacing:.02em;padding:5px 12px 6px;text-align:center;white-space:nowrap;
+  }
+  #coach.on{opacity:1}
+  @media (max-width:900px){ #coach{font-size:clamp(11px,2.1vw,15px);white-space:normal} }
   /* Das Titelbild bringt Titel und Untertitel schon mit — der Schleier hält
      nur noch den Knopf und legt sich unten leicht dunkel darunter, damit er
      auf dem hellen Kiesweg lesbar bleibt. */
@@ -251,6 +266,7 @@
   </div>
   <div id="stage">
     <canvas id="cv" width="480" height="300"></canvas>
+    <div id="coach"></div>
     <div id="veil" class="on">
       <h1>RADLTOUR</h1>
       <p>Ein Tag an der Isar.<br>
@@ -1032,7 +1048,16 @@ let drag=null;
    Eine Totzone verhindert, dass ein wackliger Daumen dabei bremst.       */
 const ZONEN=new Map();
 const HALT_VOLL=0.55;       // Sekunden bis zum vollen Ausschlag
-const TEMPO_TOT=12;         // Pixel Totzone, bevor Ziehen aufs Tempo geht
+const TEMPO_TOT=8;          // Pixel Totzone, bevor Ziehen aufs Tempo geht
+/* Tempo war am Handy fummelig: Wer den Daumen zum Greifen hält, will ihn nicht
+   gleichzeitig hoch und runter schieben. Deshalb zählt jetzt zusätzlich, WO
+   man aufsetzt — oben am Bild heißt zügig, unten heißt gemütlich, die Mitte
+   lässt das Tempo, wie es war. Ziehen bleibt als Feinjustierung. */
+function tempoAusHoehe(rel){          // rel: 0 = ganz oben, 1 = ganz unten
+  if(rel<0.34) return  1;
+  if(rel>0.72) return -1;
+  return null;
+}
 function zoneAus(){
   const letzte=[...ZONEN.values()].pop();
   G.haltSeite = letzte ? letzte.seite : 0;
@@ -1050,6 +1075,10 @@ window.addEventListener('pointerdown',e=>{
   if(uiTreffer(e.target)) return;
   if(TOUCH){
     const seite=(e.clientX < window.innerWidth/2) ? -1 : 1;
+    const r2=cv.getBoundingClientRect();
+    const rel=(e.clientY-r2.top)/Math.max(1,r2.height);
+    const t=tempoAusHoehe(Math.max(0,Math.min(1,rel)));
+    if(t!==null){ G.speedWish=t; G.tempoZeig=1.2; }
     ZONEN.set(e.pointerId,{seite:seite,y0:e.clientY,sp0:G.speedWish,tempo:false});
     G.haltT=0; zoneAus();
   } else {
@@ -1063,7 +1092,8 @@ window.addEventListener('pointermove',e=>{
     const dy=z.y0-e.clientY;
     if(!z.tempo && Math.abs(dy)<TEMPO_TOT) return;
     z.tempo=true;
-    G.speedWish=Math.max(-1,Math.min(1, z.sp0 + (dy-(dy>0?TEMPO_TOT:-TEMPO_TOT))/(r.height*0.32)));
+    G.speedWish=Math.max(-1,Math.min(1, z.sp0 + (dy-(dy>0?TEMPO_TOT:-TEMPO_TOT))/(r.height*0.22)));
+    G.tempoZeig=0.9;
     return;
   }
   if(!drag) return;
@@ -2359,16 +2389,29 @@ function drawFlyers(dt){
     ctx.textAlign='left'; ctx.globalAlpha=1;
   }
 }
-/* Einweisung unten im Bild */
+/* Einweisung unten im Bild — als HTML, damit sie auf jedem Schirm scharf ist */
+const coachEl=document.getElementById('coach');
+let coachGezeigt='';
 function drawCoach(){
-  if(G.coachT<=0||!G.coachTxt) return;
-  ctx.globalAlpha=Math.min(1,G.coachT*1.6);
-  ctx.font='bold 10px ui-monospace, Menlo, monospace'; ctx.textAlign='center';
-  const w=Math.round(ctx.measureText(G.coachTxt).width)+18;
-  R(W/2-w/2,H-50,w,16,'rgba(8,14,10,0.80)');
-  R(W/2-w/2,H-50,w,1,'rgba(180,210,150,0.35)');
-  ctx.fillStyle='#e8f0d8'; ctx.fillText(G.coachTxt,W/2,H-39);
-  ctx.textAlign='left'; ctx.globalAlpha=1;
+  const an=(G.coachT>0&&G.coachTxt);
+  if(an&&G.coachTxt!==coachGezeigt){ coachEl.textContent=G.coachTxt; coachGezeigt=G.coachTxt; }
+  coachEl.classList.toggle('on',!!an);
+  if(!an) coachGezeigt='';
+}
+/* Tempo-Rückmeldung: ein kurzer Balken am Bildrand, wenn sich das Tempo
+   ändert — sonst merkt man am Handy nicht, ob der Daumen etwas bewirkt hat. */
+function drawTempo(dt){
+  G.tempoZeig=Math.max(0,(G.tempoZeig||0)-dt);
+  if(G.tempoZeig<=0) return;
+  const a=Math.min(1,G.tempoZeig*1.6);
+  const h2=64, x=W-9, y=H/2-h2/2;
+  ctx.globalAlpha=a*0.55; R(x,y,4,h2,'#0e160e');
+  const v=Math.max(-1,Math.min(1,G.speedWish||0));
+  const mitte=y+h2/2, len=Math.round(h2/2*Math.abs(v));
+  ctx.globalAlpha=a;
+  R(x,v>=0?mitte-len:mitte,4,Math.max(1,len),v>=0?'#b8e08a':'#e0b88a');
+  R(x-2,mitte-1,8,2,'#e8f0d8');
+  ctx.globalAlpha=1;
 }
 /* Wo steh ich? Fortschritt im aktuellen Abschnitt, oben rechts */
 function drawHud(){
@@ -2692,6 +2735,7 @@ function frame(now){
     render(G.paused?0:dt);
     applyGrade();
   }
+  drawCoach();                      // jedes Bild, auch im Ende und in der Pause
   if(G.paused) drawPause();
   (()=>{ const ic=document.querySelector('link[rel=apple-touch-icon]');
        if(ic) document.getElementById('homeicon').src=ic.href; })();
@@ -3082,7 +3126,7 @@ function render(dt){
   drawLabels(dt);
   drawChain();
   drawHud();
-  drawCoach();
+  drawCoach(); drawTempo(dt);
   drawChapterTitle(dt);
   drawFlyers(dt);
 
@@ -3136,6 +3180,7 @@ function betreteAbschnitt(i){
   coach('Nochmal '+t+' — hier fehlen dir noch '+fehlendIn(c)+'.',4.2);
 }
 function startEnding(){
+  G.coachT=0; G.coachTxt='';        // die Anweisungszeile hat am Ziel nichts verloren
   /* Wer es bis hierher geschafft hat, zählt: die Begleitung im Biergarten
      ist eine eigene Auszeichnung — sie überlebt jede Pfütze auf dem Weg. */
   if(!G.tour||G.tourIdx>=((G.tour||[]).length-1)){
@@ -3511,19 +3556,24 @@ function renderEnding(dt){
     const grp=z.slice(1,-1), sum=z[z.length-1];
     if(da(1)){
       const sp=Math.ceil(grp.length/2), zh=12;
-      const bw=286, bx=Math.round(W/2-bw/2), by=H-104, bh=sp*zh+26;
+      ctx.font='10px ui-monospace, Menlo, monospace';
+      /* Die Spalten richten sich nach dem längsten Eintrag — „Falter & Libellen"
+         ist deutlich breiter als „Farne" und lief vorher aus dem Kasten. */
+      let breit=0;
+      grp.forEach(o=>{ breit=Math.max(breit,ctx.measureText(o.t+(o.extra?'  ✓':'')).width); });
+      const spalte=Math.ceil(breit)+16;
+      const bw=Math.min(W-16,spalte*2+20), bx=Math.round(W/2-bw/2), by=H-104, bh=sp*zh+26;
       ctx.globalAlpha=0.74*alpha(1); ctx.fillStyle='#140d06';
       ctx.fillRect(bx,by,bw,bh);
       ctx.globalAlpha=alpha(1); ctx.fillStyle='#f0c060'; ctx.fillRect(bx,by,bw,1);
       ctx.globalAlpha=1;
-      ctx.font='10px ui-monospace, Menlo, monospace';
       grp.forEach((o,i)=>{
         if(!da(i+1)) return;
         const sp2=i<sp?0:1, r2=i<sp?i:i-sp;
         ctx.globalAlpha=alpha(i+1);
         ctx.textAlign='left';
         ctx.fillStyle=o.gold?'#ffd97a':'#d8ccae';
-        ctx.fillText(o.t+(o.extra?'  ✓':''),bx+12+sp2*138,by+15+r2*zh);
+        ctx.fillText(o.t+(o.extra?'  ✓':''),bx+10+sp2*spalte,by+15+r2*zh);
         ctx.globalAlpha=1;
       });
       ctx.textAlign='center';
