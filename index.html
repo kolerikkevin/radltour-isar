@@ -2024,24 +2024,64 @@ function drawRider(){
   ctx.drawImage(img,0,0,iw,hh, bx+(armOut&&side<0?-sway:sway),by+pedal, bw,hh);
   ctx.restore();
 
-  /* Der Zungenschuss-Arm: vom Sprite-Schulterpunkt zur Zielhand — als
-     Pixel-Linie mit dunkler Outline, damit er zum Sprite gehört. */
+  /* Statt eines gezeichneten Arms ein Zauberband: Von der Hand des Sprites
+     schießt ein Funkenstrahl zum Wegrand. Der gemalte Arm war eine gerade
+     Linie über einem gepixelten Körper — sie gehörte nie richtig dazu und
+     wurde bei voller Länge zu einem beigen Balken.
+
+     Das Band besteht aus einzelnen Funken auf einer leicht gebogenen Bahn.
+     Sie sitzen auf festen Stützstellen, damit nichts flimmert, und werden
+     zur Spitze hin kleiner und heller. Der Schwung der Bahn hängt an der
+     Länge — kurz ist fast gerade, weit ausgeholt hängt durch. */
   if(armOut){
-    const shX=cx+side*24, shY=by+44+pedal;
+    /* Startpunkt ist die gemalte Hand des Sprites, nicht die Schulter — der
+       Sprite streckt den Arm ja bereits, das Band setzt dort an. */
+    const shX=cx+side*30, shY=by+47+pedal;
     const tx=Math.round(W/2+G.playerX*9+G.handX), ty=Math.round(H-14+G.handY);
-    ctx.lineCap='round';
-    ctx.strokeStyle='#1a1420'; ctx.lineWidth=8;               // Outline
-    ctx.beginPath(); ctx.moveTo(shX,shY); ctx.lineTo(tx,ty); ctx.stroke();
-    ctx.strokeStyle=KEV.skin; ctx.lineWidth=5;                // Haut
-    ctx.beginPath(); ctx.moveTo(shX,shY); ctx.lineTo(tx,ty); ctx.stroke();
-    ctx.strokeStyle=KEV.skinSh; ctx.lineWidth=2;              // Schattenkante
-    ctx.beginPath(); ctx.moveTo(shX,shY+2); ctx.lineTo(tx,ty+2); ctx.stroke();
-    // Hand
-    ctx.fillStyle='#1a1420'; ctx.fillRect(tx-4,ty-4,9,8);
-    ctx.fillStyle=KEV.skin;  ctx.fillRect(tx-3,ty-3,7,6);
-    if(G.brushT>0){
-      ctx.globalAlpha=Math.min(1,G.brushT*4);
-      R(tx+side*5,ty-3,3,1,'#fffbe0'); R(tx+side*7,ty-1,4,1,'#fffbe0'); R(tx+side*5,ty+2,3,1,'#fffbe0');
+    const dx=tx-shX, dy=ty-shY, dist=Math.hypot(dx,dy);
+    const bogen=Math.min(26,dist*0.20);                        // Durchhang
+    const n=Math.max(8,Math.round(dist/5));
+    const puls=G.t*14;
+    const bahn=t2=>[shX+dx*t2, shY+dy*t2+Math.sin(t2*Math.PI)*bogen];
+    /* Erst eine dunkle Spur als Absetzung: Auf hellem Kies verschwindet ein
+       helles Funkeln sonst, genau wie vorher die Fangmarken. */
+    ctx.globalAlpha=0.34; ctx.lineCap='round';
+    ctx.strokeStyle='#0d1a2c'; ctx.lineWidth=5;
+    ctx.beginPath();
+    for(let i=0;i<=12;i++){ const q=bahn(i/12); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
+    ctx.stroke();
+    /* Darüber der Strahl selbst, in zwei Lagen: ein weicher blauer Faden und
+       darauf die einzelnen Funken. */
+    ctx.globalAlpha=0.42; ctx.strokeStyle='#7fd0ff'; ctx.lineWidth=2.4;
+    ctx.beginPath();
+    for(let i=0;i<=12;i++){ const q=bahn(i/12); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
+    ctx.stroke();
+    ctx.globalAlpha=1;
+    for(let i=0;i<=n;i++){
+      const t2=i/n, q=bahn(t2);
+      const fl=0.5+0.5*Math.sin(puls+i*1.9);                  // Funkeln
+      const s=Math.max(1,Math.round((2.4-t2*0.8)*(0.75+fl*0.6)));
+      ctx.globalAlpha=Math.min(1,(0.55+t2*0.45)*(0.6+fl*0.4));
+      R(q[0],q[1],s,s,i%3===0?'#ffffff':(i%3===1?'#dff2ff':'#8fd4ff'));
+      if(i%5===0){                                            // Sternchen quer dazu
+        ctx.globalAlpha*=0.7;
+        R(q[0]-2,q[1],1,1,'#ffffff'); R(q[0]+s+1,q[1],1,1,'#ffffff');
+        R(q[0],q[1]-2,1,1,'#ffffff'); R(q[0],q[1]+s+1,1,1,'#ffffff');
+      }
+    }
+    ctx.globalAlpha=1;
+    /* Die Spitze: ein kleiner heller Kern mit Hof — dort greift das Band zu. */
+    const kern=G.brushT>0?3:2;
+    ctx.globalAlpha=0.35; oval(tx,ty,kern*3.4,kern*3.0,'#7fd0ff'); ctx.globalAlpha=1;
+    oval(tx,ty,kern*1.7,kern*1.5,'#d8f2ff');
+    R(tx-1,ty-1,3,3,'#ffffff');
+    if(G.brushT>0){                                           // Treffer: kurzer Blitz
+      const a2=Math.min(1,G.brushT*4);
+      ctx.globalAlpha=a2*0.8;
+      for(let k=0;k<6;k++){
+        const w2=Math.PI*2*k/6+G.t*3, l=7+k%2*4;
+        R(tx+Math.cos(w2)*l,ty+Math.sin(w2)*l,2,2,'#ffffff');
+      }
       ctx.globalAlpha=1;
     }
   }
