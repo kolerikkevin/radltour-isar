@@ -2344,10 +2344,12 @@ function drawFollowers(){
   /* Maßstab wie am Wegesrand: ein Reh neben Kevin ist genau so groß wie das
      Reh, an dem er eben vorbeigefahren ist. Dafür wird dieselbe Rechnung
      benutzt — Gruppenhöhe mal Formfaktor mal die Wegbreite an seiner Stelle. */
-  const segN=findSeg(G.pos+PLAYERZ);
-  /* Derselbe Maßstab wie am Wegrand, nur gegen Ausreißer gedeckelt: Vorher
-     lag der Deckel bei 70 und die Begleitung war dadurch ein Drittel zu klein. */
-  const uNah=Math.max(90,Math.min(320,(segN.p1.screen.scale||0.02)*ROADW*W/2));
+  /* Der Maßstab an Kevins Stelle, direkt aus seiner Entfernung zur Kamera
+     gerechnet statt aus dem Segment unter ihm. Das Segment wechselt bei jedem
+     Bild und schwankt dabei um ein paar Prozent — genau davon hat die ganze
+     Begleitung gezittert. Kevins Abstand ist dagegen immer derselbe, also
+     bleibt auch die Größe ruhig. */
+  const uNah=CAMD/PLAYERZ*ROADW*W/2;
   const masz=S=>{
     const b=artBild(S);
     return (ART_H[S.g]||0.7)*((b&&b.skal)||1)*uNah;
