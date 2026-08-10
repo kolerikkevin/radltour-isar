@@ -2808,6 +2808,10 @@ function frame(now){
     applyGrade();
   }
   drawCoach();                      // jedes Bild, auch im Ende und in der Pause
+  /* Auch die Namensschilder brauchen jeden Bildtakt: Sie leben als HTML außerhalb
+     des Canvas und wurden bisher nur in render() abgebaut. Im Biergarten läuft
+     aber renderEnding — dort klebte das letzte Schild dann fest. */
+  if(G.done) drawLabels(G.paused?0:dt);
   if(G.paused) drawPause();
   (()=>{ const ic=document.querySelector('link[rel=apple-touch-icon]');
        if(ic) document.getElementById('homeicon').src=ic.href; })();
