@@ -360,6 +360,12 @@
    ========================================================================== */
 
 const W=480, H=300;
+/* Wie fein darf gerundet werden? Wird das Bild intern mehrfach gerastert
+   (siehe ganzzahligPassen weiter unten), entspricht ein Drittel Spielpixel
+   genau einem Gerätepixel. Dann darf sich alles auch in Dritteln bewegen —
+   die Kanten bleiben hart, die Bewegung wird dreimal feiner. */
+var STUFE=1;
+const RAST=v=>Math.round(v*STUFE)/STUFE;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 ctx.imageSmoothingEnabled=false;
 
@@ -1312,9 +1318,12 @@ function project(p,camX,camY,camZ){
   p.camera.y=(p.world.y||0)-camY;
   p.camera.z=(p.world.z||0)-camZ;
   p.screen.scale=CAMD/p.camera.z;
-  p.screen.x=Math.round(W/2 + p.screen.scale*p.camera.x*W/2);
-  p.screen.y=Math.round(H/2 - p.screen.scale*p.camera.y*H/2);
-  p.screen.w=Math.round(p.screen.scale*ROADW*W/2*(p.eng||1));
+  /* Auf Gerätepixel gerundet statt auf ganze Spielpixel: Bei dreifacher
+     interner Rasterung sind das Drittelschritte — die Strecke wandert damit
+     dreimal feiner unter dem Rad durch, ohne dass eine Kante weich wird. */
+  p.screen.x=RAST(W/2 + p.screen.scale*p.camera.x*W/2);
+  p.screen.y=RAST(H/2 - p.screen.scale*p.camera.y*H/2);
+  p.screen.w=RAST(p.screen.scale*ROADW*W/2*(p.eng||1));
 }
 const findSeg=z=>segments[Math.floor(z/SEGL)%segments.length];
 
@@ -1413,28 +1422,47 @@ function quadPat(x1,y1,w1,x2,y2,w2,pat){
    mitskaliert: nah grob, fern fein — dadurch bekommt der Boden Tiefe, statt
    überall gleich gerastert auszusehen. Die Kapitelfarbe bleibt darunter
    liegen, die Textur legt sich nur mit halber Deckung darüber. */
-function texFill(name,x1,y1,w1,x2,y2,w2,tiefe,deck){
+function texFill(name,x1,y1,w1,x2,y2,w2,tiefe,deck,phase){
   const im=TEX[name];
   if(!im||!im.complete||!im.naturalWidth) return false;
   let pat=TEXPAT[name];
   if(!pat){ pat=ctx.createPattern(im,'repeat'); if(!pat) return false; TEXPAT[name]=pat; }
   if(!pat.setTransform) return false;
-  const s=Math.max(0.10,Math.min(2.2,tiefe));
-  pat.setTransform(new DOMMatrix([s,0,0,s,0,-(G.pos*0.05*s)%im.naturalHeight]));
+  /* Der Musterfaktor rastet in halben Oktaven ein und die Verschiebung auf
+     ganze Pixel: Ein stufenlos mitwachsendes Muster wird bei jedem Bild neu
+     abgetastet und fängt an zu kribbeln. */
+  const roh=Math.max(0.10,Math.min(2.2,tiefe));
+  /* Halbe Oktaven. Ganze Zweierpotenzen wären rechnerisch sauberer — kein
+     krummer Texelabstand —, sahen aber schlechter aus: Die Stufen sind so grob,
+     dass das Muster über lange Strecken denselben Maßstab behält und dabei
+     sichtbar unter dem Rad durchkriecht. Hier gewinnt das Auge gegen die
+     Theorie; einmal probiert, einmal verworfen. */
+  const s=Math.pow(2,Math.round(Math.log2(roh)*2)/2);
+  /* Die Verschiebung hing bisher an der Kameraposition — dadurch wanderte das
+     Muster mit dem Rad mit, statt am Boden zu kleben. Sie kommt jetzt aus der
+     Position des Segments in der Welt: Damit gehört jedes Stück Muster zu
+     einem Stück Weg und zieht mit ihm nach unten aus dem Bild.
+     Dieselbe Matrix wird wiederverwendet — pro Bild laufen hier hunderte
+     Segmente durch, und jedes neue Objekt füttert nur den Aufräumer. */
+  TEXM.a=s; TEXM.d=s;
+  TEXM.f=Math.round(-((phase||0)*0.05*s)%im.naturalHeight);
+  pat.setTransform(TEXM);
   ctx.globalAlpha=deck;
   quadPat(x1,y1,w1,x2,y2,w2,pat);
   ctx.globalAlpha=1;
   return true;
 }
+const TEXM=new DOMMatrix([1,0,0,1,0,0]);
 const BODEN={garage:'beton', gate:'beton', siedl:'asphalt',
              isar:'kies',   wald:'waldboden', ziel:'kies'};
 function renderSegment(seg,pal){
   const p1=seg.p1.screen, p2=seg.p2.screen, d=seg.dark?0:1;
+  const welt=seg.index*SEGL;          // wo dieses Stück Weg in der Welt liegt
   const r1=p1.w*0.30, r2=p2.w*0.30;
   quad(0,p1.y,W*2, 0,p2.y,W*2, pal.grass[d]);                       // Wiese
   const tiefe=Math.max(0.10,Math.min(2.2,p1.w/150));
   if(seg.ch!=='garage'&&seg.ch!=='gate')
-    texFill('wiese',0,p1.y,W*2, 0,p2.y,W*2, tiefe, 0.42);
+    texFill('wiese',0,p1.y,W*2, 0,p2.y,W*2, tiefe, 0.42, welt);
   if(seg.ch==='isar'){                                              // Wasser links
     const wx1=p1.x-p1.w*3.2, wx2=p2.x-p2.w*3.2;
     // Wasserton vom gemalten Fluss abgenommen, sonst stoßen zwei Türkis
@@ -1452,7 +1480,7 @@ function renderSegment(seg,pal){
   quadPat(p1.x,p1.y,p1.w+r1*0.45, p2.x,p2.y,p2.w+r2*0.45, ditherPat(pal.road[d],8));
   quad(p1.x,p1.y,p1.w, p2.x,p2.y,p2.w, pal.road[d]);                // Weg
   texFill(seg.pfadWeg?'waldboden':(BODEN[seg.ch]||'kies'),
-          p1.x,p1.y,p1.w, p2.x,p2.y,p2.w, tiefe, seg.dark?0.26:0.40);
+          p1.x,p1.y,p1.w, p2.x,p2.y,p2.w, tiefe, seg.dark?0.26:0.40, welt);
   if(pal.lane && d===1) quad(p1.x,p1.y,p1.w*0.045, p2.x,p2.y,p2.w*0.045, pal.lane);
 
   if(seg.ch==='siedl'){
@@ -1465,7 +1493,7 @@ function renderSegment(seg,pal){
   }
   if(seg.ch==='garage'||seg.ch==='gate'){
     // Betonboden: feine Körnung plus Dehnungsfugen quer zur Fahrtrichtung
-    texFill('beton',p1.x,p1.y,p1.w+r1, p2.x,p2.y,p2.w+r2, tiefe, 0.30);
+    texFill('beton',p1.x,p1.y,p1.w+r1, p2.x,p2.y,p2.w+r2, tiefe, 0.30, welt);
     if(seg.index%9===0){
       const fw=Math.max(1,Math.round((p1.y-p2.y)*0.5)+1);
       quad(p1.x,p1.y,p1.w+r1, p2.x,p1.y-fw,p2.w+r2, shade(pal.road[0],0.45));
@@ -1514,7 +1542,7 @@ function renderSegment(seg,pal){
     const kanteF=1+r1/p1.w;                                 // Außenkante des Bankett
     uf(kO1,kanteF,kO2,kanteF, shade(pal.rum[d],0.16));      // Kiesbank, greift in den Sand
     texFill('kies',p1.x-p1.w*(kO1+kanteF)/2,p1.y,p1.w*(kO1-kanteF)/2,
-                   p2.x-p2.w*(kO2+kanteF)/2,p2.y,p2.w*(kO2-kanteF)/2, tiefe, 0.32);
+                   p2.x-p2.w*(kO2+kanteF)/2,p2.y,p2.w*(kO2-kanteF)/2, tiefe, 0.32, welt);
     if(i1%13<5){                                            // Grasnarbe greift zurück
       const g1=kanteF+0.30+0.55*(0.5+0.5*wv(i1,0.41,1.3));
       const g2=kanteF+0.30+0.55*(0.5+0.5*wv(i2,0.41,1.3));
@@ -1773,17 +1801,46 @@ const SHOPS={
 };
 /* Ladenschild über der gemalten Fassade — Text zeichnen wir selbst,
    weil generierte Buchstaben in Pixelgröße nie verlässlich lesbar sind. */
+/* Die Schrift auf den Ladenschildern wurde bisher bei jedem Bild neu gesetzt,
+   mit einer Größe wie „3,4 Pixel" — auf ganze Pixel gerundet. Beim
+   Näherkommen sprang sie dadurch von 3 auf 4 Pixel und wurde jedes Mal
+   komplett neu gerastert: genau das hat geflackert. Jetzt wird jeder
+   Ladenname einmal groß gesetzt und danach wie ein Bild skaliert. */
+const SCHILD_CACHE=new Map();
+const SCHILD_GROSS=48;
+function schildBild(text,farbe){
+  const key=text+'|'+farbe;
+  let c=SCHILD_CACHE.get(key);
+  if(c) return c;
+  const schrift='bold '+SCHILD_GROSS+'px ui-monospace, Menlo, monospace';
+  const mess=document.createElement('canvas').getContext('2d');
+  mess.font=schrift;
+  const br=Math.max(8,Math.ceil(mess.measureText(text).width)+10);
+  c=document.createElement('canvas');
+  c.width=br; c.height=Math.round(SCHILD_GROSS*1.35);
+  const g=c.getContext('2d');
+  g.font=schrift; g.textAlign='center'; g.fillStyle=farbe;
+  g.fillText(text,c.width/2,SCHILD_GROSS);
+  SCHILD_CACHE.set(key,c);
+  return c;
+}
 function spShopSign(x,y,u,k){
   const S=SHOPS[k]||SHOPS.zeitung;
-  const sw=Math.round(u*1.30), sh=Math.max(2,Math.round(u*0.24));
-  const sy=Math.round(y-u*1.92);
+  const sw=RAST(u*1.30), sh=Math.max(2,RAST(u*0.24));
+  const sy=RAST(y-u*1.92);
   R(x-sw/2,sy,sw,sh,'#2a2a30');
   R(x-sw/2,sy,sw,1,S.a);
-  if(u>13){
-    ctx.font='bold '+Math.round(u*0.17)+'px ui-monospace, Menlo, monospace';
-    ctx.textAlign='center'; ctx.fillStyle='#f0e4c0';
-    ctx.fillText(S.t,Math.round(x),Math.round(sy+sh-u*0.05));
-    ctx.textAlign='left';
+  /* Unter sechs Pixeln Höhe ist von dem Namen ohnehin nur noch ein Streifen
+     übrig — der zappelt bloß. Deshalb erscheint die Schrift erst, wenn sie
+     etwas hergibt, und blendet über ein Stück Weg sanft auf. */
+  const zh=u*0.17*1.35;
+  if(zh>5.2){
+    const b=schildBild(S.t,'#f0e4c0');
+    const zw=b.width*zh/b.height;
+    const ga=ctx.globalAlpha;
+    if(zh<7.5) ctx.globalAlpha=ga*((zh-5.2)/2.3);
+    bildRuhig(b, x-zw/2, sy+sh-u*0.05-zh*(SCHILD_GROSS/b.height), zw, zh);
+    ctx.globalAlpha=ga;
   }
 }
 function spShop(x,y,u,k){
@@ -2021,10 +2078,15 @@ function spNature(x,y,u,sp){
   const bild=artBild(S);
   if(bild){
     const hh=(ART_H[S.g]||0.7)*(bild.skal||1)*u, scl=hh/bild.height;
-    const dw=Math.round(bild.width*scl), dh=Math.round(hh);
-    if(dw>=2&&dh>=2&&dw<1600&&dh<1600){
-      ctx.imageSmoothingEnabled=false;
-      ctx.drawImage(bild,Math.round(x-dw/2),Math.round(y-dh),dw,dh);
+    const dw=bild.width*scl, dh=hh;
+    /* Ist das Bild da, wird nur noch daraus gezeichnet — auch wenn es winzig
+       ist. Sonst sprang die gemalte Notfigur ein, in voller Deckkraft, und
+       leuchtete als heller Punkt am Horizont. */
+    if(dh<1600&&dw<1600){
+      const ga=ctx.globalAlpha, gp=dh*STUFE;
+      if(gp<7) ctx.globalAlpha=ga*Math.max(0,(gp-2.5)/4.5);
+      if(ctx.globalAlpha>0.004) bildRuhig(bild,x-dw/2,y-dh,dw,dh);
+      ctx.globalAlpha=ga;
       return;
     }
   }
@@ -2437,13 +2499,12 @@ function drawFollowers(){
   const zeichne=(S,x,y,hoehe,spiegel,form)=>{
     const bild=artBild(S,form);
     if(bild){
-      const dh=Math.max(4,Math.round(hoehe));
-      const dw=Math.max(4,Math.round(bild.width*dh/bild.height));
-      ctx.imageSmoothingEnabled=false;
+      const dh=Math.max(4,hoehe);
+      const dw=Math.max(4,bild.width*dh/bild.height);
       ctx.globalAlpha=0.30; oval(x,y+2,dw*0.42,2.4,'#0d1408'); ctx.globalAlpha=1;
-      if(spiegel){ ctx.save(); ctx.translate(Math.round(x)*2,0); ctx.scale(-1,1);
-        ctx.drawImage(bild,Math.round(x-dw/2),Math.round(y-dh),dw,dh); ctx.restore(); }
-      else ctx.drawImage(bild,Math.round(x-dw/2),Math.round(y-dh),dw,dh);
+      if(spiegel){ ctx.save(); ctx.translate(x*2,0); ctx.scale(-1,1);
+        bildRuhig(bild,x-dw/2,y-dh,dw,dh); ctx.restore(); }
+      else bildRuhig(bild,x-dw/2,y-dh,dw,dh);
       return true;
     }
     return false;
@@ -2902,6 +2963,76 @@ function sprLoad(name,dataUri){
   const im=new Image(); im.src=dataUri;
   SPR[name]=Object.assign({img:im},SPRDEF[name]||{w:1});
 }
+/* ------------------- Ruhiges Zeichnen verkleinerter Bilder ----------------
+   Ein Sprite von 73 Pixeln Höhe wird am Horizont mit 3 Pixeln gezeichnet.
+   Ohne Filter bedeutet das: von 24 Bildzeilen überlebt genau eine — und
+   welche, das wechselt bei jeder noch so kleinen Größenänderung. Genau davon
+   flimmern feine Äste und Gräser.
+   Deshalb bekommt jedes Bild beim ersten Gebrauch vorgerechnete Halbierungen.
+   Gezeichnet wird immer aus der Stufe, die der Zielgröße am nächsten liegt —
+   verkleinert wird also nie mehr als um die Hälfte, und was verlorengeht,
+   verblasst sauber, statt zu blinken.                                      */
+function mipsVon(bild){
+  const st=[bild];
+  let cur=bild, w=bild.naturalWidth||bild.width, h=bild.naturalHeight||bild.height;
+  for(let i=0;i<4;i++){
+    w=Math.floor(w/2); h=Math.floor(h/2);
+    if(w<3||h<3) break;
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const k=c.getContext('2d');
+    k.imageSmoothingEnabled=true;
+    if('imageSmoothingQuality' in k) k.imageSmoothingQuality='high';
+    k.drawImage(cur,0,0,w,h);
+    st.push(c); cur=c;
+  }
+  return st;
+}
+function mipFuer(bild,zielH){
+  let st=bild.__mips;
+  if(!st){ try{ st=bild.__mips=mipsVon(bild); }catch(e){ st=bild.__mips=[bild]; } }
+  let b=st[0];
+  for(let i=1;i<st.length;i++){
+    if((st[i].height||0)>=zielH) b=st[i]; else break;
+  }
+  return b;
+}
+/* Zeichnet ein Bild mit der passenden Stufe. Wird auch danach noch spürbar
+   verkleinert, kommt der weiche Filter dazu — nah bleibt alles hart. */
+function bildRuhig(bild,dx,dy,dw,dh){
+  /* Entscheidend ist, wie groß das Bild am Ende auf dem Gerät liegt, nicht wie
+     viele Spielpixel es belegt: Bei dreifacher interner Rasterung wird ein
+     Sprite von 20 Spielpixeln in Wahrheit 60 Gerätepixel hoch gezeichnet. Wer
+     hier mit Spielpixeln rechnet, greift zu einer viel zu groben Stufe und
+     zieht sie dann wieder auseinander — matschig statt scharf. */
+  const echtH=dh*STUFE;
+  const q=mipFuer(bild,echtH);
+  const qh=(q.naturalHeight||q.height||1);
+  /* Die Grenze liegt bei 1:1 statt bei 94 %: Jede noch so leichte
+     Verkleinerung wirft Bildzeilen weg, und gerade die gemalte Schrift auf
+     den Ladenschildern hat davon geflackert. Vergrößert — also nah — wird
+     weiter hart gezeichnet, dort lebt der Pixel-Look. */
+  /* Etwas über 1:1 wird noch gefiltert: Genau im Übergangsbereich, wo ein
+     Sprite gerade eben vergrößert wird, ist der Gewinn an Ruhe groß und der
+     Verlust an Schärfe praktisch nicht zu sehen. Alles Größere wird hart
+     gezeichnet — dort lebt der Pixel-Look. */
+  if(echtH<qh*1.4){
+    /* Verkleinert und weich gezeichnet: Hier darf das Bild zwischen den
+       Pixeln stehen. Gemessen ist das der größte Einzelgewinn gegen das
+       Zappeln — ein Baum, der beim Näherkommen in Sprüngen wächst, wirkt
+       unruhiger als einer, der sich stetig schiebt. */
+    ctx.imageSmoothingEnabled=true;
+    if('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality='low';
+    ctx.drawImage(q,dx,dy,dw,dh);
+  } else {
+    /* Nah und scharf: harte Kanten auf ganzen Gerätepixeln, wie es der
+       Pixel-Look verlangt. */
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(q,RAST(dx),RAST(dy),RAST(dw),RAST(dh));
+  }
+  /* Der Filterzustand bleibt stehen, wie er ist: Ihn nach jedem Bild
+     zurückzustellen zwang das nächste ferne Sprite, ihn wieder umzulegen —
+     jeder Wechsel zerteilt den Zeichenstapel der Grafikkarte. */
+}
 function drawSpr(name,cx,cy,u,flip){
   const S=SPR[name];
   if(!S||!S.img.complete||!S.img.naturalWidth) return false;
@@ -2911,15 +3042,24 @@ function drawSpr(name,cx,cy,u,flip){
      Nachschärfen selbst. Ruhe kommt aus der ganzzahligen Zielfläche. */
   const scl = S.h ? (u*S.h)/ih : (u*S.w)/iw;
   if(scl<=0) return true;
-  const dw=Math.round(iw*scl), dh=Math.round(ih*scl);
-  if(dw<2||dh<2) return true;                 // zu klein: nichts zeichnen
+  const dw=iw*scl, dh=ih*scl;
+  /* Nur nach der Höhe wegschneiden: Ein schmales, hohes Sprite (die Absperrkette
+     ist 13 zu 101) fiel sonst über die Breite heraus, während es noch voll
+     deckend gezeichnet wurde — und poppte weg. */
+  if(dh*STUFE<1.2||dw<=0) return true;
   if(dw>1600||dh>1600) return true;
-  const dx=Math.round(cx-dw/2);
-  const dy=Math.round(cy-(S.anchor==='top'?0:(S.anchor==='mid'?dh/2:dh)));
-  ctx.imageSmoothingEnabled=false;
-  if(flip){ ctx.save(); ctx.translate(Math.round(cx)*2,0); ctx.scale(-1,1);
-            ctx.drawImage(S.img,dx,dy,dw,dh); ctx.restore(); }
-  else      ctx.drawImage(S.img,dx,dy,dw,dh);
+  const dx=cx-dw/2;
+  const dy=cy-(S.anchor==='top'?0:(S.anchor==='mid'?dh/2:dh));
+  /* Winzige Reste am Horizont zappeln mehr, als sie zeigen: Unter sieben
+     Pixeln blenden sie aus, statt hart zu verschwinden. */
+  const ga=ctx.globalAlpha, gp=dh*STUFE;      // Höhe in Gerätepixeln
+  if(gp<7) ctx.globalAlpha=ga*Math.max(0,(gp-2.5)/4.5);
+  if(ctx.globalAlpha>0.004){
+    if(flip){ ctx.save(); ctx.translate(cx*2,0); ctx.scale(-1,1);
+              bildRuhig(S.img,dx,dy,dw,dh); ctx.restore(); }
+    else      bildRuhig(S.img,dx,dy,dw,dh);
+  }
+  ctx.globalAlpha=ga;
   return true;
 }
 sprLoad('carBlau','data:image/png;base64,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');
@@ -3121,10 +3261,11 @@ function applyGrade(){
 let last=performance.now();
 function frame(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
+  stufeNachfuehren(dt,now);
   if(!G.paused){
     G.t+=dt;
     if(G.running&&!G.done) update(dt);
-    else if(G.done) mixAmbience(dt);   // im Biergarten mischt der Ton weiter
+    else if(G.done){ mixAmbience(dt); wespenTon(dt); }   // im Biergarten mischt der Ton weiter
   }
   const TITELBILD=(LANG==='en'&&BG_TITEL_EN.complete&&BG_TITEL_EN.naturalWidth)?BG_TITEL_EN:BG_TITEL;
   if(!G.running&&TITELBILD.complete&&TITELBILD.naturalWidth){
@@ -3144,8 +3285,14 @@ function frame(now){
   if(G.paused) drawPause();
   (()=>{ const ic=document.querySelector('link[rel=apple-touch-icon]');
        if(ic) document.getElementById('homeicon').src=ic.href; })();
+  requestAnimationFrame(frame);
+}
 /* Alle festen Beschriftungen aus der Tabelle setzen. Läuft einmal beim Start
-   und noch einmal, wenn jemand die Sprache wechselt. */
+   und noch einmal, wenn jemand die Sprache wechselt.
+   ACHTUNG, hier steckte ein alter Fehler: Die schließende Klammer von frame()
+   fehlte, wodurch dieser ganze Block im Bildtakt lief — sechzigmal pro Sekunde
+   sämtliche Beschriftungen neu setzen, und bei offenem Sammelheftchen jedes Mal
+   die komplette Artenliste neu aufbauen. */
 function spracheAnwenden(){
   document.documentElement.lang=LANG;
   artenSprache();
@@ -3185,10 +3332,8 @@ document.getElementById('lang').onclick=()=>{
   G.bilanz=null; bilanzAufgebaut=false;
   spracheAnwenden();
 };
-spracheAnwenden();
-homeHinweis();                              // vor dem Titelbild, direkt nach dem Drehen
-requestAnimationFrame(frame);
-}
+/* Der erste Aufruf steht ganz unten, nach der Sprachwahl — hier oben gibt es
+   LANG noch nicht. */
 /* Pause: Bild friert ein, Ton geht auf null, ein Klick oder P macht weiter */
 function drawPause(){
   ctx.fillStyle='rgba(6,10,6,0.55)'; ctx.fillRect(0,0,W,H);
@@ -4470,11 +4615,13 @@ function ganzzahligPassen(){
   const passt=Math.floor(roh*dpr/480+0.02);           // ganze Faktoren, die hineinpassen
   const k=Math.max(1,passt);
   const rest=(480*k/dpr)/roh;                         // wie viel Bild bliebe übrig
+  SKAL_ROH=roh; SKAL_DPR=dpr;
   if(rest>=0.90){
     /* Der Rand ist schmal genug: Wir nehmen den ganzen Faktor. Jeder Spielpixel
        sitzt dann auf exakt gleich vielen Gerätepixeln — schärfer geht es nicht. */
     fr.style.width=(480*k/dpr)+'px';
     cv.style.imageRendering='pixelated';
+    SKAL_MODUS='ganz';
     stufe(1);
   } else {
     /* Ganzzahlig würde hier zu viel Bild kosten. Dann wird stattdessen intern
@@ -4484,15 +4631,49 @@ function ganzzahligPassen(){
        einer groben Stufung — das Bild bleibt in voller Größe. */
     fr.style.width='';
     cv.style.imageRendering='auto';
+    SKAL_MODUS='intern';
     /* Am Handy höchstens dreifach: Vierfach wären fast 2,3 Millionen Pixel
        pro Bild, das kostet dort mehr Bilder pro Sekunde als es an Schärfe
        bringt. */
-    stufe(Math.max(2,Math.min(TOUCH?3:4,Math.round(roh*dpr/480))));
+    stufe(Math.max(2,Math.min(STUFE_MAX(),Math.round(roh*dpr/480))));
+  }
+}
+/* Wie fein darf intern gerastert werden? Das hängt davon ab, was das Gerät
+   schafft — deshalb wird es nicht geraten, sondern gemessen: Läuft es ein
+   paar Sekunden ruhig über 55 Bildern, kommt eine Stufe dazu; bricht es
+   unter 45 ein, geht eine weg. So bekommen starke Geräte die volle Schärfe
+   und schwache bleiben flüssig. */
+let SKAL_MODUS='intern', SKAL_ROH=0, SKAL_DPR=1;
+let stufeDach=0, fpsFenster=[], fpsSperre=0, abgestuft=false, zaeh=0;
+function STUFE_MAX(){
+  if(!stufeDach) stufeDach=TOUCH?3:4;
+  return stufeDach;
+}
+function stufeNachfuehren(dt,now){
+  if(SKAL_MODUS!=='intern'||!SKAL_ROH) return;
+  fpsFenster.push(dt);
+  if(fpsFenster.length<90) return;                 // ~1,5 Sekunden sammeln
+  const mittel=fpsFenster.reduce((a,b)=>a+b,0)/fpsFenster.length;
+  fpsFenster.length=0;
+  const fps=1/Math.max(0.0005,mittel);
+  if(now<fpsSperre) return;
+  const gewuenscht=Math.round(SKAL_ROH*SKAL_DPR/480);
+  /* Ein einzelner Einbruch reicht nicht: Ein Kapitelwechsel oder eine
+     Aufräumpause der Sprache drückt die Rate kurz, ohne dass das Gerät
+     überfordert wäre. Erst wenn zwei Messfenster hintereinander zäh sind,
+     wird gröber gerastert. */
+  if(fps<45){ zaeh++; } else if(fps>52){ zaeh=0; }
+  if(zaeh>=2&&STUFE>2){
+    zaeh=0; stufeDach=STUFE-1; fpsSperre=now+8000; abgestuft=true; stufe(stufeDach);
+  } else if(!abgestuft&&fps>56&&STUFE<Math.min(TOUCH?3:4,gewuenscht)&&stufeDach<(TOUCH?3:4)){
+    /* Nach oben nur, solange nie heruntergeschaltet werden musste. Sonst
+       pendelt es: gröber → wieder flüssig → feiner → wieder zäh. Wer einmal
+       an seiner Grenze war, bleibt auf der ruhigen Stufe. */
+    stufeDach=STUFE+1; fpsSperre=now+8000; stufe(Math.min(stufeDach,gewuenscht,TOUCH?3:4));
   }
 }
 /* Interner Vergrößerungsschritt: Der Zeichencode bleibt bei 480×300, die
    Grundmatrix macht daraus ganze Vielfache. */
-let STUFE=1;
 function stufe(k){
   if(k===STUFE&&cv.width===W*k) return;
   STUFE=k;
@@ -4500,10 +4681,45 @@ function stufe(k){
   ctx.setTransform(k,0,0,k,0,0);
   ctx.imageSmoothingEnabled=false;
 }
-addEventListener('resize',ganzzahligPassen);
+// Nach einer echten Größenänderung darf das Gerät sich neu beweisen
+addEventListener('resize',()=>{ abgestuft=false; stufeDach=0; ganzzahligPassen(); });
 addEventListener('orientationchange',()=>setTimeout(ganzzahligPassen,120));
 if(window.visualViewport) visualViewport.addEventListener('resize',ganzzahligPassen);
 ganzzahligPassen();
+spracheAnwenden();
+homeHinweis();                              // vor dem Titelbild, direkt nach dem Drehen
+/* Jede Art wird beim ersten Auftauchen eingefärbt — das ist genau der Moment,
+   in dem etwas Neues ins Bild kommt, und ein Hänger dort fällt doppelt auf.
+   Deshalb wird der ganze Bestand in Ruhephasen vorbereitet, ein paar Arten
+   pro Leerlauf. */
+(function artenVorbereiten(){
+  let i=0;
+  const ruhig=window.requestIdleCallback||(f=>setTimeout(()=>f({timeRemaining:()=>6}),120));
+  const schritt=(deadline)=>{
+    let n=0;
+    while(i<SPECIES.length&&n<4&&(!deadline||deadline.timeRemaining()>3)){
+      try{ const b=artBild(SPECIES[i]); if(b&&!b.__mips) b.__mips=mipsVon(b); }catch(e){}
+      i++; n++;
+    }
+    if(i<SPECIES.length) ruhig(schritt);
+  };
+  ruhig(schritt);
+  /* Dasselbe für die gemalte Kulisse: Bäume, Häuser, Autos, Deko. Ihre
+     Verkleinerungsstufen entstanden bisher erst beim ersten Anblick — also
+     genau an der Kapitelgrenze, wo ohnehin viel Neues ins Bild kommt. */
+  const namen=Object.keys(SPR);
+  let j=0;
+  const kulisse=(deadline)=>{
+    let n=0;
+    while(j<namen.length&&n<3&&(!deadline||deadline.timeRemaining()>3)){
+      const S=SPR[namen[j]];
+      try{ if(S&&S.img&&S.img.complete&&S.img.naturalWidth&&!S.img.__mips) S.img.__mips=mipsVon(S.img); }catch(e){}
+      j++; n++;
+    }
+    if(j<namen.length) ruhig(kulisse);
+  };
+  ruhig(kulisse);
+})();
 document.getElementById('hint').textContent = TOUCH ? T('hint_touch') : T('hint_maus');
 // Der Titeltext bleibt geräteneutral — er stimmt für Maus wie für Daumen.
 document.querySelector('#veil p').innerHTML=TOUCH?T('veil_touch'):T('veil_maus');
