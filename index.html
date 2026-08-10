@@ -3384,6 +3384,7 @@ function frame(now){
   if(G.paused) drawPause();
   (()=>{ const ic=document.querySelector('link[rel=apple-touch-icon]');
        if(ic) document.getElementById('homeicon').src=ic.href; })();
+  drawMitschnitt();
   requestAnimationFrame(frame);
 }
 /* Alle festen Beschriftungen aus der Tabelle setzen. Läuft einmal beim Start
@@ -3450,8 +3451,51 @@ function togglePause(){
   if(SND.master&&SND.ac) SND.master.gain.setTargetAtTime(G.paused?0:0.85,SND.ac.currentTime,0.15);
 }
 document.getElementById('pausebtn').onclick=togglePause;
+
+/* ------------------------- Mitschnitt (Shift+R) ---------------------------
+   Für Videos vom Spiel. Aufgenommen wird direkt der Bildspeicher samt Ton —
+   also genau die Pixel, die das Spiel zeichnet, ohne den Weichzeichner einer
+   Bildschirmaufnahme. Läuft nur auf Tastendruck und stört sonst niemanden. */
+let mitschnitt=null, mitschnittTeile=[], mitschnittSeit=0;
+function mitschnittStart(){
+  if(mitschnitt||!cv.captureStream||typeof MediaRecorder==='undefined') return;
+  let strom=cv.captureStream(60);
+  try{                                   // den Spielton mit aufnehmen
+    if(SND.ac&&SND.master){
+      const ziel=SND.ac.createMediaStreamDestination();
+      SND.master.connect(ziel);
+      strom=new MediaStream(strom.getVideoTracks().concat(ziel.stream.getAudioTracks()));
+    }
+  }catch(e){}
+  const kandidaten=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const typ=kandidaten.find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+  try{ mitschnitt=new MediaRecorder(strom,{mimeType:typ,videoBitsPerSecond:16000000}); }
+  catch(e){ mitschnitt=new MediaRecorder(strom); }
+  mitschnittTeile=[];
+  mitschnitt.ondataavailable=e=>{ if(e.data&&e.data.size) mitschnittTeile.push(e.data); };
+  mitschnitt.onstop=()=>{
+    const blob=new Blob(mitschnittTeile,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='radltour-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webm';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    mitschnitt=null; mitschnittTeile=[];
+  };
+  mitschnitt.start(1000);
+  mitschnittSeit=performance.now();
+}
+function mitschnittStop(){ if(mitschnitt&&mitschnitt.state!=='inactive') mitschnitt.stop(); }
+/* Ein kleiner roter Punkt oben links zeigt, dass es läuft — er landet mit im
+   Bild, deshalb sitzt er ganz am Rand und lässt sich wegschneiden. */
+function drawMitschnitt(){
+  if(!mitschnitt) return;
+  const an=Math.floor(performance.now()/500)%2===0;
+  if(an){ ctx.fillStyle='#ff3b30'; ctx.beginPath(); ctx.arc(6,6,3,0,6.283); ctx.fill(); }
+}
 addEventListener('keydown',e=>{
   if(e.key==='p'||e.key==='P'||e.key===' ') { e.preventDefault(); togglePause(); }
+  if((e.key==='r'||e.key==='R')&&e.shiftKey){ e.preventDefault(); mitschnitt?mitschnittStop():mitschnittStart(); }
 });
 function update(dt){
   /* Der Schwung läuft immer aus — sobald man nichts mehr tut, rollt Kevin
