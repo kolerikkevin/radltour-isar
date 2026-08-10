@@ -659,6 +659,17 @@ function sfxSplash(){
   const g=a.createGain(); g.gain.value=SPLASH_VOL*(0.8+Math.random()*0.4);
   s.connect(g); g.connect(SND.master); s.start();
 }
+/* Kies klingt anders als Wasser: kein Platschen und kein Gleiten, sondern
+   ein trockenes Knirschen aus vielen kleinen Anschlägen — dazu ein tiefes
+   Rumpeln, das die Schwere der Schüttung trägt. */
+function sfxKies(){
+  const a=ac(); if(!a) return;
+  noiseBurst(0.30,900,4200,0.13,'highpass');      // der erste Griff ins Grobe
+  noiseBurst(3.2,2600,1200,0.075,'bandpass');     // das Knirschen darunter
+  noiseBurst(3.2,180,90,0.055,'lowpass');         // Rumpeln der Steine
+  for(let i=0;i<7;i++)                            // einzelne Kiesel am Rahmen
+    tone(160+Math.random()*260,0.05,'square',0.014,0.08+i*0.13);
+}
 function sfxJoin(){ tone(660,0.22,'triangle',0.07,0); tone(990,0.26,'triangle',0.05,0.09); }
 /* Die Mischung pro Kapitel — drinnen trocken, draußen lebendig */
 /* Aktuell aus: Fahrtwind, Wasser und die Tiefgaragen-Kulisse.
@@ -686,7 +697,8 @@ function mixAmbience(dt){
   ambSet('tire', m.tire, 90);
   ambSet('water',m.water,760);
   // In der langen Pfütze rumpelt und schleift es hörbar mit
-  ambSet('slide',G.slideT>0?0.075:0, 750+Math.sin(G.t*9)*260);
+  ambSet('slide',G.slideT>0?(G.slideKies?0.105:0.075):0,
+         G.slideKies ? 2400+Math.sin(G.t*17)*700 : 750+Math.sin(G.t*9)*260);
   ambSet('grass',m.grass*(0.6+v*0.5)+rough*0.008, 2200+rough*1200);
   const t=SND.ac.currentTime;
   if(bikeGain&&bikeSrc){
@@ -876,15 +888,23 @@ for(const c of CHAP){
          ein, zwei Sekunden lang weder Lenkung noch Arm. */
       /* Lange Pfützen ziehen sich jetzt über ~45 Segmente — bei Reisetempo
          gut drei Sekunden Wasser. Dafür schmaler: man kann ihnen ausweichen. */
+      /* Lange Stellen gibt es in zwei Sorten: Pfütze und lose Kiesschüttung.
+         Beide nehmen dir für ein paar Sekunden Lenkung und Arm — die Pfütze
+         gibt hinterher Schwung, der Kies frisst ihn. Welche es wird, wechselt
+         sich ab, damit man nicht weiß, was kommt. */
       if(c.name==='isar'){ s.gravel=0.55;
-        if(i%64===0){ const lang=(i%192===0);
-          s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.50),r:lang?range(0.30,0.42):range(0.20,0.32),lang:lang};
-          if(lang) for(let k=1;k<45;k++) if(segments[i+k]) segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1};
+        if(i%64===0){ const lang=(i%192===0), kies=lang&&(i%384===192);
+          s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.50),r:lang?range(0.30,0.42):range(0.20,0.32),
+                    lang:lang,kies:kies};
+          if(lang) for(let k=1;k<45;k++) if(segments[i+k])
+            segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1,kies:kies};
         } }
       if(c.name==='wald'){ s.gravel=0.20;
-        if(i%90===0){ const lang=(i%270===0);
-          s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.46),r:lang?range(0.28,0.40):range(0.18,0.28),lang:lang};
-          if(lang) for(let k=1;k<40;k++) if(segments[i+k]) segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1};
+        if(i%90===0){ const lang=(i%270===0), kies=lang&&(i%540===270);
+          s.puddle={x:(rnd()<0.5?-1:1)*range(0.22,0.46),r:lang?range(0.28,0.40):range(0.18,0.28),
+                    lang:lang,kies:kies};
+          if(lang) for(let k=1;k<40;k++) if(segments[i+k])
+            segments[i+k].puddle={x:s.puddle.x,r:s.puddle.r,echo:1,kies:kies};
         } }
     }
   }
@@ -950,7 +970,7 @@ const G={
   chain:0, chainT:0, chainBest:0, pulse:0, boost:0, labelY:0,
   loot:[], tut:0, gatePulled:false, coachT:0, coachTxt:'', coached:{},
   arm:0, armWant:0, armSide:1, aim:null, aimSp:null, handX:28, handY:-96,
-  hold:null, holdT:0, strike:null, rings:[], slideT:0, slideX:0,
+  hold:null, holdT:0, strike:null, rings:[], slideT:0, slideX:0, slideKies:false,
   grpDone:{}, secretFound:false, paused:false, horizonY:150
 };
 /* Kurze Einweisung unten im Bild — nur in der Tiefgarage, danach nie wieder */
@@ -989,18 +1009,25 @@ function zoneAus(){
   G.haltSeite = letzte ? letzte.seite : 0;
   if(!letzte) G.haltT=0;
 }
-cv.addEventListener('pointerdown',e=>{
-  const r=cv.getBoundingClientRect();
+/* Die Zonen liegen auf dem ganzen Fenster, nicht nur auf dem Bild: Am Handy
+   bleiben links und rechts vom Bild schwarze Ränder, und genau dorthin legt
+   man intuitiv die Daumen. Wer dort drückt, soll lenken — nicht ins Leere
+   fassen. Nur die Bedienleiste und die Overlays bleiben ausgenommen, sonst
+   würde jeder Knopfdruck zugleich am Lenker ziehen. */
+function uiTreffer(t){
+  return !!(t&&t.closest&&t.closest('#ui,#heft,#lupe,#dreh,#home,#veil'));
+}
+window.addEventListener('pointerdown',e=>{
+  if(uiTreffer(e.target)) return;
   if(TOUCH){
-    const seite=((e.clientX-r.left) < r.width/2) ? -1 : 1;
+    const seite=(e.clientX < window.innerWidth/2) ? -1 : 1;
     ZONEN.set(e.pointerId,{seite:seite,y0:e.clientY,sp0:G.speedWish,tempo:false});
     G.haltT=0; zoneAus();
   } else {
     drag={x:e.clientX,y:e.clientY,lean:G.targetLean,sp:G.speedWish};
   }
-  try{cv.setPointerCapture(e.pointerId);}catch(err){}
 });
-cv.addEventListener('pointermove',e=>{
+window.addEventListener('pointermove',e=>{
   const r=cv.getBoundingClientRect();
   if(TOUCH){
     const z=ZONEN.get(e.pointerId); if(!z) return;
@@ -1019,8 +1046,9 @@ const endDrag=e=>{
   if(e&&e.pointerId!==undefined) ZONEN.delete(e.pointerId); else ZONEN.clear();
   zoneAus();
 };
-cv.addEventListener('pointerup',endDrag);
-cv.addEventListener('pointercancel',endDrag);
+window.addEventListener('pointerup',endDrag);
+window.addEventListener('pointercancel',endDrag);
+window.addEventListener('pointerleave',endDrag);
 
 /* ============================= Projektion ================================ */
 function project(p,camX,camY,camZ){
@@ -1238,8 +1266,21 @@ function renderSegment(seg,pal){
   }
   if(seg.puddle){
     const px1=p1.x+p1.w*seg.puddle.x, w=p1.w*seg.puddle.r;
-    oval(px1,p1.y,w,Math.max(1,w*0.20),'#9fc0c2');
-    oval(px1-w*0.22,p1.y-w*0.03,w*0.42,Math.max(1,w*0.07),'#d9ecec');
+    if(seg.puddle.kies){
+      /* Loser Kies: kein Spiegel, sondern eine aufgeworfene helle Schüttung
+         mit groben Körnern — man sieht schon von weitem, dass das kein
+         Wasser ist. */
+      oval(px1,p1.y,w,Math.max(1,w*0.22),'#b8ac90');
+      oval(px1,p1.y-Math.max(1,w*0.05),w*0.86,Math.max(1,w*0.15),'#d2c6a6');
+      if(seg.index%2===0){
+        const k=Math.max(1,Math.round(w*0.12));
+        R(px1-w*0.55+((seg.index*29)%Math.max(1,w)),p1.y-k,k,k,'#8f8468');
+        R(px1+w*0.20-((seg.index*17)%Math.max(1,w*0.6)),p1.y-1,k,Math.max(1,k*0.7),'#e6dcc0');
+      }
+    } else {
+      oval(px1,p1.y,w,Math.max(1,w*0.20),'#9fc0c2');
+      oval(px1-w*0.22,p1.y-w*0.03,w*0.42,Math.max(1,w*0.07),'#d9ecec');
+    }
   }
   if(seg.fog<1){                                                    // Tiefennebel
     ctx.globalAlpha=1-seg.fog; ctx.fillStyle=pal.fog;
@@ -2660,7 +2701,10 @@ function update(dt){
   const warImSlide=G.slideT>0;
   G.slideT=Math.max(0,G.slideT-dt);
   const sliding=G.slideT>0;
-  if(warImSlide&&!sliding){ G.boost+=340; coach('Mit Schwung aus der Pfütze!',2.2); }
+  if(warImSlide&&!sliding){
+    if(G.slideKies){ coach('Endlich wieder fester Boden.',2.2); G.slideKies=false; }
+    else { G.boost+=340; coach('Mit Schwung aus der Pfütze!',2.2); }
+  }
   const want=sliding?0:lean*2.0;                  // im Rutschen greift nichts
   /* Am Trampelpfad wird der Weg nach außen kurz freigegeben — sonst endet
      die Spur genau dort, wo die Lenkung aufhört, und man kommt nie hinein. */
@@ -2672,6 +2716,8 @@ function update(dt){
        darin hängen, bis sie zu Ende ist. Lenken hilft nicht. */
     G.playerX+=(G.slideX-G.playerX)*Math.min(1,dt*3.4);
     G.playerX+=Math.sin(G.t*6.5)*0.055*dt*8;              // Schlingern in der Spur
+    // Loser Kies bremst nicht einmal, sondern die ganze Strecke lang
+    if(G.slideKies) G.speed*=1-Math.min(0.7,1.15*dt);
     G.playerX=Math.max(-PATH_LIMIT-0.3,Math.min(PATH_LIMIT+0.3,G.playerX));
     G.armWant=0;
     G.arm+=(0-G.arm)*Math.min(1,dt*9);
@@ -2719,9 +2765,20 @@ function update(dt){
     if(s&&s.puddle&&!s.puddle.hit&&!s.puddle.echo&&Math.abs(G.playerX-s.puddle.x)<s.puddle.r+0.12){
       s.puddle.hit=true;
       if(s.puddle.lang){
-        /* Lange Pfütze: ab jetzt rutscht es. Weder Lenken noch Greifen —
+        /* Lange Stelle: ab jetzt rutscht es. Weder Lenken noch Greifen —
            nur durchgleiten und schauen. */
         G.slideT=3.6; G.slideX=s.puddle.x;   // in die Rinne gezogen
+        G.slideKies=!!s.puddle.kies;
+        if(G.slideKies){
+          /* Im Kies bleibt die Begleitung — es spritzt ja nichts. Dafür
+             frisst die lose Schüttung das Tempo, und zwar sofort spürbar. */
+          sfxKies();
+          G.speed*=0.62; G.boost=0;
+          addLabel(W/2,H-72,'Loser Kies — das bremst.','#e0d2a8');
+          addParts(W/2+G.playerX*9,H-22,26,'#cfc2a0',6.5,3.4);
+          G.shake=Math.max(G.shake,0.95);
+          continue;
+        }
         /* Der Tausch: die Pfütze gibt hinterher Schwung — aber das
            Spritzwasser verscheucht die ganze Begleitung, nicht nur die Falter.
            Wer sie behalten will, fährt außen herum. */
