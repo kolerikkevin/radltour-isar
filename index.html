@@ -1668,8 +1668,12 @@ function drawSpriteObj(seg,sp,pal){
   /* Objekte werden nicht mehr bei fester Größe weggeschnitten — sie fahren
      seitlich aus dem Bild. Ganz nah blenden sie über eine Strecke aus,
      statt von einem Bild aufs nächste zu verschwinden. */
-  const uMax=(sp.type==='sp'?150:(landmark?400:340));
-  const uFade=uMax*0.62;
+  /* Wie nah darf ein Objekt kommen, bevor es geht? Die Fundstellen waren mit
+     150 viel zu früh dran — sie lösten sich auf, während sie noch mitten im
+     Bild standen. Jetzt bleiben sie wie alles andere, bis sie seitlich
+     hinausfahren; das Ausblenden setzt erst ganz am Schluss ein. */
+  const uMax=(landmark?400:340);
+  const uFade=uMax*0.86;
   if(u<0.5||u>uMax) return;
   const nah=u>uFade?1-(u-uFade)/(uMax-uFade):1;
   const x=seg.p1.screen.x+u*sp.offset;
@@ -3738,13 +3742,16 @@ function update(dt){
   if(G.chapter==='garage'){
     const idx=Math.floor((G.pos+PLAYERZ)/SEGL)-GAR.from;
     const cue=(key,at,txt,secs)=>{ if(!G.coached[key]&&idx>=at){ G.coached[key]=1; coach(txt,secs); } };
-    cue('a', 14,T('cue_a'),4.0);
-    cue('b', 42,T('cue_b'),3.8);
-    cue('c',100,T('cue_c'),4.4);
+    /* Worum es überhaupt geht, muss als Erstes klar sein — vorher stand hier
+       nur, WIE man greift, nicht WOZU. */
+    cue('ziel', 5,T('cue_ziel'),5.0);
+    cue('a', 26,T('cue_a'),4.0);
+    cue('b', 54,T('cue_b'),3.8);
+    cue('c',112,T('cue_c'),4.4);
     /* Wie man schneller wird, stand bisher nur klein unter dem Bild. Hier
        kommt es einmal groß — und im Wortlaut des Geräts, auf dem gespielt
        wird. */
-    cue('t',150,TOUCH?T('cue_tempo_touch'):T('cue_tempo_maus'),4.6);
+    cue('t',168,TOUCH?T('cue_tempo_touch'):T('cue_tempo_maus'),4.6);
     cue('d',238,T('cue_d'),4.2);
   }
   G.coachT=Math.max(0,G.coachT-dt);
@@ -4194,11 +4201,12 @@ const TXT={
   lupe_zu:'klicken zum Schließen', heft_titel:'Mein Sammelheftchen', zurueck:'zurück',
   hint_touch:'links/rechts drücken und halten: lehnen und greifen · schnell tippen: schneller',
   hint_maus:'← → oder ziehen: lehnen · ↑ oder schnell klicken: schneller',
-  veil_maus:'Ein Tag an der Isar.<br>Lehn dich zur Seite und streif im Vorbeifahren, was am Wegrand steht.<br>Wie weit du dich lehnst, entscheidet, was deine Hand erwischt.<br>Nichts kann schiefgehen.',
-  veil_touch:'Ein Tag an der Isar.<br>Drück links oder rechts auf den Bildschirm — Kevin lehnt sich dorthin und die Hand geht raus.<br>Je länger du hältst, desto weiter.<br>Schnelles Tippen macht Tempo — hörst du auf, rollst du weiter.',
+  veil_maus:'Ein Tag an der Isar.<br>Sammle so viele Arten wie möglich: Lehn dich zur Seite, dann greift dein Zauberband nach allem, was du im Vorbeifahren streifst.<br>Wie weit du dich lehnst, entscheidet, was du erwischst.<br>Nichts kann schiefgehen.',
+  veil_touch:'Ein Tag an der Isar.<br>Sammle so viele Arten wie möglich: Drück links oder rechts auf den Bildschirm — Kevin lehnt sich dorthin und sein Zauberband greift nach allem am Wegrand.<br>Je länger du hältst, desto weiter.<br>Schnelles Tippen macht Tempo — hörst du auf, rollst du weiter.',
   grp_b:'Bäume', grp_s:'Sträucher', grp_n:'Farne', grp_p:'Pflanzen',
   grp_t:'Tiere', grp_v:'Vögel', grp_f:'Falter & Libellen', grp_x:'Fische',
   ch_garage:'Tiefgarage', ch_siedl:'Giesing', ch_isar:'Isarweg', ch_wald:'Perlacher Forst', ch_ziel:'Kugler Alm',
+  cue_ziel:'Sammle unterwegs so viel wie möglich — dein Zauberband schnappt sich alles, was du streifst.',
   cue_tempo_touch:'Schneller wirst du durch schnelles Tippen — hörst du auf, rollst du weiter.',
   cue_tempo_maus:'Schneller wirst du mit Pfeil nach oben oder schnellem Klicken.',
   cue_a:'Lehn dich zur Seite. Die Hand geht von allein raus.',
@@ -4271,11 +4279,12 @@ const TXT={
   lupe_zu:'click to close', heft_titel:'My field notebook', zurueck:'back',
   hint_touch:'press and hold left/right: lean and reach · tap fast: go faster',
   hint_maus:'← → or drag: lean · ↑ or click fast: go faster',
-  veil_maus:'A day along the Isar.<br>Lean to the side and brush past whatever grows by the path.<br>How far you lean decides what your hand catches.<br>Nothing can go wrong.',
-  veil_touch:'A day along the Isar.<br>Press the left or right side of the screen — Kevin leans that way and his hand reaches out.<br>The longer you hold, the further.<br>Tapping fast makes you faster — stop and you keep rolling.',
+  veil_maus:'A day along the Isar.<br>Collect as many species as you can: lean to the side and your magic ribbon grabs whatever you brush past.<br>How far you lean decides what you catch.<br>Nothing can go wrong.',
+  veil_touch:'A day along the Isar.<br>Collect as many species as you can: press the left or right side of the screen — Kevin leans that way and his magic ribbon reaches for whatever grows by the path.<br>The longer you hold, the further.<br>Tapping fast makes you faster — stop and you keep rolling.',
   grp_b:'Trees', grp_s:'Shrubs', grp_n:'Ferns', grp_p:'Flowers',
   grp_t:'Animals', grp_v:'Birds', grp_f:'Butterflies & dragonflies', grp_x:'Fish',
   ch_garage:'Car park', ch_siedl:'Giesing', ch_isar:'Isar path', ch_wald:'Perlacher Forst', ch_ziel:'Kugler Alm',
+  cue_ziel:'Collect as much as you can — your magic ribbon grabs whatever you brush past.',
   cue_tempo_touch:'Tap fast to speed up — stop tapping and you keep rolling.',
   cue_tempo_maus:'Speed up with the up arrow, or by clicking fast.',
   cue_a:'Lean to the side. Your hand reaches out.',
@@ -4453,13 +4462,8 @@ function renderEnding(dt){
   drawBiergarten(t,false);
 
   ctx.textAlign='center';
-  if(t<3.2){
-    ctx.globalAlpha=Math.min(1,t*0.9)*Math.min(1,(3.2-t)*1.4);
-    ctx.font='bold 13px ui-monospace, Menlo, monospace';
-    ctx.fillStyle='rgba(255,250,230,0.8)'; ctx.fillText(T('alm'),W/2+1,63);
-    ctx.fillStyle='#3a2a14'; ctx.fillText(T('alm'),W/2,62);
-    ctx.globalAlpha=1;
-  }
+  /* Der Spruch über die Kugler Alm stand quer im Bild und nahm dem
+     Ankommen die Ruhe — das Bild erzählt das von selbst. */
   const st=endeStufe();
   /* Die Bilanz läuft Zeile für Zeile ein und bleibt stehen. Sie sitzt in zwei
      Spalten unten im Bild, damit Kevin und die Begleitung sichtbar bleiben. */
