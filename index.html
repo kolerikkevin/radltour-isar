@@ -194,13 +194,16 @@
      hochgezogen (1,25 → 2,5 Gerätepixel je Spielpixel). Gezeichnete Buchstaben
      bekommen dadurch ungleich dicke Striche. Als Text bleibt sie überall
      gestochen — dieselbe Schriftfamilie, gleiche Anmutung. */
+  /* Oben statt unten: Vorne im Bild sitzt der Fahrer, und die Zeile lag genau
+     auf ihm. Jetzt steht sie unter der Kapitelüberschrift — dort, wo ohnehin
+     alles Erklärende steht — und ist kleiner gesetzt. */
   #coach{
-    position:absolute;left:50%;bottom:11%;transform:translateX(-50%);
-    max-width:88%;z-index:4;pointer-events:none;opacity:0;transition:opacity .18s;
-    background:rgba(8,14,10,.82);border-top:1px solid rgba(180,210,150,.35);
+    position:absolute;left:50%;top:26%;transform:translateX(-50%);
+    max-width:80%;z-index:4;pointer-events:none;opacity:0;transition:opacity .18s;
+    background:rgba(8,14,10,.78);border-top:1px solid rgba(180,210,150,.30);
     color:#e8f0d8;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    font-weight:700;font-size:clamp(10px,1.55vw,13px);line-height:1.45;
-    letter-spacing:.02em;padding:5px 12px 6px;text-align:center;white-space:nowrap;
+    font-weight:700;font-size:clamp(9px,1.25vw,11px);line-height:1.4;
+    letter-spacing:.02em;padding:4px 10px 5px;text-align:center;white-space:nowrap;
   }
   #coach.on{opacity:1}
   /* Die Namensschilder der Funde aus demselben Grund wie die Anweisungszeile
@@ -216,7 +219,7 @@
     border-top:1px solid rgba(150,190,130,.35);
   }
   @media (max-width:900px){ #labels span{font-size:clamp(10px,1.9vw,14px)} }
-  @media (max-width:900px){ #coach{font-size:clamp(11px,2.1vw,15px);white-space:normal} }
+  @media (max-width:900px){ #coach{font-size:clamp(10px,1.6vw,12px);white-space:normal;top:24%} }
   /* Das Titelbild bringt Titel und Untertitel schon mit — der Schleier hält
      nur noch den Knopf und legt sich unten leicht dunkel darunter, damit er
      auf dem hellen Kiesweg lesbar bleibt. */
@@ -1052,7 +1055,13 @@ const G={
   grpDone:{}, secretFound:false, paused:false, horizonY:150
 };
 /* Kurze Einweisung unten im Bild — nur in der Tiefgarage, danach nie wieder */
-function coach(txt,secs){ G.coachTxt=txt; G.coachT=secs||3.4; }
+/* Kapitelüberschrift und Einweisung teilen sich denselben Platz. Kommt eine
+   Zeile, während die Überschrift noch steht, wartet sie, statt sich zu
+   überlagern. */
+function coach(txt,secs){
+  if(chT>0.25){ G.coachWartet={t:txt,s:secs||3.4}; return; }
+  G.coachTxt=txt; G.coachT=secs||3.4;
+}
 const SPEED_MIN=1500, SPEED_CRUISE=2600, SPEED_MAX=4200;
 /* Das Rad rollt fast geradeaus — die Arbeit macht der Arm. */
 const PATH_LIMIT=0.42, ARM_MAX=2.95;
@@ -1435,7 +1444,14 @@ function drawSpriteObj(seg,sp,pal){
   switch(sp.type){
     case 'car':    if(!drawSpr((seg.ch==='siedl'?CARDAY:CARSPR)[sp.v||0],x,y,u)) spCar(x,y,u,sp.col); break;
     case 'pillar': if(!drawSpr('pillar',x,y,u)) spPillar(x,y,u); break;
-    case 'lamp':   if(!drawSpr('lamp',x,y,u)) spLamp(x,y,u); else spLampGlow(x,y,u); break;
+    case 'lamp':
+      /* Deckenlampen hängen 3,35 Wegbreiten hoch. Fährt man in der Siedlung,
+         stehen die letzten Lampen der Ausfahrt noch vor einem — und liegen
+         dann als weiße Striche im blauen Himmel. Sie werden deshalb nur
+         gezeichnet, solange man selbst noch unter der Decke ist. */
+      if(G.chapter!=='garage'&&G.chapter!=='gate') break;
+      if(!drawSpr('lamp',x,y,u)) spLamp(x,y,u); else spLampGlow(x,y,u);
+      break;
     case 'hedge':  if(!drawSpr('hedge',x,y,u)) spHedge(x,y,u); break;
     case 'house':  if(!drawSpr(HAUSSPR[sp.v||0]||'house1',x,y,u)) spHouse(x,y,u,sp.seed); break;
     case 'bin':    if(!drawSpr('bin',x,y,u)) spBin(x,y,u); break;
@@ -3204,6 +3220,7 @@ function update(dt){
     cue('d',238,T('cue_d'),4.2);
   }
   G.coachT=Math.max(0,G.coachT-dt);
+  if(G.coachWartet&&chT<=0.25){ const w=G.coachWartet; G.coachWartet=null; coach(w.t,w.s); }
   mixAmbience(dt);
   ambientBirds(dt);
   G.flash=Math.max(0,G.flash-dt*0.55);
@@ -3640,16 +3657,16 @@ const TXT={
   grp_b:'Bäume', grp_s:'Sträucher', grp_n:'Farne', grp_p:'Pflanzen',
   grp_t:'Tiere', grp_v:'Vögel', grp_f:'Falter & Libellen', grp_x:'Fische',
   ch_garage:'Tiefgarage', ch_siedl:'Siedlung', ch_isar:'Isarweg', ch_wald:'Der Wald', ch_ziel:'Kugler Alm',
-  cue_a:'Lehn dich zur Seite — die Hand geht von allein raus.',
-  cue_b:'Rechts steht eine Pylone. Streif sie im Vorbeifahren.',
-  cue_c:'Der Feuerlöscher hängt weiter außen — lehn weiter, dann streckt sich der Arm.',
-  cue_d:'Vorne hängt die Kette fürs Tor. Zieh dran.',
-  cue_g1:'Raus ans Licht. Gleich kommt die Siedlung.',
-  cue_g2:'Da gibt es fünf Sachen zum Mitnehmen — Zeitung, Kaffee, Brezn, Eis, Monstera.',
-  cue_s1:'Vor jedem Laden steht was am Weg. Lehn dich hin und greif zu.',
+  cue_a:'Lehn dich zur Seite. Die Hand geht von allein raus.',
+  cue_b:'Rechts die Pylone — streif sie.',
+  cue_c:'Der Löscher hängt weiter außen. Lehn weiter.',
+  cue_d:'Die Kette fürs Tor. Zieh dran.',
+  cue_g1:'Raus ans Licht.',
+  cue_g2:'Fünf Sachen zum Mitnehmen.',
+  cue_s1:'Vor jedem Laden steht was am Weg.',
   cue_s2:'Gleich rechts: die Zeitung.',
-  cue_s3:'Läuft. Es kommen noch drei Läden.',
-  gut1:'Genau so. Je weiter du dich lehnst, desto weiter reicht die Hand.',
+  cue_s3:'Noch drei Läden.',
+  gut1:'Genau so. Weiter lehnen, weiter greifen.',
   gut2:'Und die andere Seite geht genauso.',
   tor_auf:'Tor auf. Da vorne ist Licht.',
   nimm_mit:'Nimm mit, was am Weg steht.',
@@ -3660,13 +3677,13 @@ const TXT={
   beglt_weg2:'Die ganze Begleitung stiebt davon!',
   selten:'Etwas Seltenes voraus — triff es genau.',
   hund_da:'Ein Hund!', hund_titel:'Ein Hund schließt sich an',
-  hund_cue:'Der läuft jetzt mit. Bis zum Biergarten.',
+  hund_cue:'Der läuft jetzt mit.',
   hund_fakt:'Stand am Weg zur Kugler Alm und ist einfach mitgekommen.',
   hund_name:'Der Hund',
-  pfad_weit:(s)=>'Weit vorn zweigt ein Trampelpfad nach '+s+' ab — halt dich schon mal auf die Seite.',
+  pfad_weit:(s)=>'Vorn ein Trampelpfad nach '+s+' — halt dich auf die Seite.',
   pfad_jetzt:(s)=>'Jetzt: ganz nach '+s+' und draufhalten.',
-  pfad_da:'Ein Trampelpfad! Der geht ein Stück in den Wald hinein.',
-  pfad_zurueck:'Zurück auf dem Waldweg', pfad_zurueck_cue:'Der Pfad mündet wieder auf den Waldweg.',
+  pfad_da:'Ein Trampelpfad in den Wald!',
+  pfad_zurueck:'Zurück auf dem Waldweg', pfad_zurueck_cue:'Zurück auf dem Waldweg.',
   links:'links', rechts:'rechts',
   siedl_bilanz:(n)=>'Siedlung: '+n+' von 5 mitgenommen.',
   abschnitt_bilanz:(t,a,b)=>t+': '+a+' von '+b+' eingesammelt.',
@@ -3715,16 +3732,16 @@ const TXT={
   grp_b:'Trees', grp_s:'Shrubs', grp_n:'Ferns', grp_p:'Flowers',
   grp_t:'Animals', grp_v:'Birds', grp_f:'Butterflies & dragonflies', grp_x:'Fish',
   ch_garage:'Car park', ch_siedl:'The village', ch_isar:'Isar path', ch_wald:'The woods', ch_ziel:'Kugler Alm',
-  cue_a:'Lean to the side — your hand reaches out by itself.',
-  cue_b:'A traffic cone on the right. Brush it as you pass.',
-  cue_c:'The extinguisher hangs further out — lean further and the arm stretches.',
-  cue_d:'The chain for the gate is ahead. Pull it.',
-  cue_g1:'Out into the light. The village is coming up.',
-  cue_g2:'Five things to pick up there — paper, coffee, pretzel, ice cream, monstera.',
-  cue_s1:'There is something by the path outside every shop. Lean over and grab it.',
+  cue_a:'Lean to the side. Your hand reaches out.',
+  cue_b:'A cone on the right — brush it.',
+  cue_c:'The extinguisher hangs further out. Lean further.',
+  cue_d:'The gate chain. Pull it.',
+  cue_g1:'Out into the light.',
+  cue_g2:'Five things to pick up.',
+  cue_s1:'Something by the path outside every shop.',
   cue_s2:'Right ahead: the newspaper.',
-  cue_s3:'Nicely done. Three more shops to come.',
-  gut1:'Just like that. The further you lean, the further your hand reaches.',
+  cue_s3:'Three more shops.',
+  gut1:'Just like that. Lean further, reach further.',
   gut2:'And the other side works the same way.',
   tor_auf:'Gate open. Daylight ahead.',
   nimm_mit:'Take whatever stands by the path.',
@@ -3735,13 +3752,13 @@ const TXT={
   beglt_weg2:'The whole company scatters!',
   selten:'Something rare ahead — hit it cleanly.',
   hund_da:'A dog!', hund_titel:'A dog joins you',
-  hund_cue:'He is coming along now. All the way to the beer garden.',
+  hund_cue:'He is coming along now.',
   hund_fakt:'Stood by the path to the Kugler Alm and simply came along.',
   hund_name:'The dog',
-  pfad_weit:(s)=>'A trail branches off to the '+s+' far ahead — start keeping to that side.',
+  pfad_weit:(s)=>'A trail to the '+s+' ahead — keep to that side.',
   pfad_jetzt:(s)=>'Now: hard '+s+' and hold it.',
-  pfad_da:'A trail! It leads a little way into the woods.',
-  pfad_zurueck:'Back on the forest track', pfad_zurueck_cue:'The trail rejoins the forest track.',
+  pfad_da:'A trail into the woods!',
+  pfad_zurueck:'Back on the forest track', pfad_zurueck_cue:'Back on the forest track.',
   links:'left', rechts:'right',
   siedl_bilanz:(n)=>'Village: '+n+' of 5 picked up.',
   abschnitt_bilanz:(t,a,b)=>t+': '+a+' of '+b+' collected.',
