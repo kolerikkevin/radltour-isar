@@ -2920,6 +2920,13 @@ function grab(sp,seg,perfekt){
   }
   if(!FOUND.has(S.n_de||S.n)){
     FOUND.add(S.n_de||S.n);
+    /* Der Zähler in der Leiste hing früher am fliegenden Namen und wurde
+       aktualisiert, wenn der im Heftchen ankam. Seit die Namen nicht mehr
+       fliegen, muss er hier hoch — sonst steht dort die ganze Fahrt über 0. */
+    const zaehler=document.getElementById('cnt');
+    if(zaehler) zaehler.textContent=FOUND.size;
+    const hb=document.getElementById('heftbtn');
+    if(hb){ hb.classList.remove('pulse'); void hb.offsetWidth; hb.classList.add('pulse'); }
     addLabel(sx,sy,S.n,'#fff4c0');
     addParts(sx,sy,16,'#fff0b0',3.2,2.4);
     /* Gruppe voll? (Seltene und das Geheimnis zählen nicht als Pflicht) */
