@@ -283,6 +283,27 @@
     font-size:9px;padding:2px 6px 4px;opacity:0;transition:opacity .25s;
   }
   #bilanzSumme.voll{color:#ffd97a}
+  /* Der Abspann: eine Zeile unter der Bilanz, kleiner und ruhiger als alles
+     darüber. Kein Kasten, kein Icon — soll wie ein Nachsatz wirken, nicht wie
+     ein Banner. Als einziges Element der Bilanz anklickbar. */
+  #bilanzGruss{
+    background:rgba(20,13,6,.86);color:#a89878;
+    font-size:8px;padding:3px 6px 4px;margin-top:2px;
+    opacity:0;transition:opacity .25s;pointer-events:auto;
+  }
+  /* Der Link trägt seine Trefferfläche im Padding und zieht sie per negativem
+     Rand wieder aus dem Layout heraus: antippbar am Handy, ohne dass die
+     Zeile höher wird. */
+  /* Der Link trägt seine Trefferfläche im Padding und zieht sie per negativem
+     Rand wieder aus dem Layout heraus: antippbar am Handy, ohne dass die
+     Zeile höher wird. Unterstrich als text-decoration, damit er an der
+     Schrift klebt statt am Polsterrand. */
+  #bilanzGruss a{color:#d8ccae;display:inline-block;padding:7px 8px;margin:-7px -4px;
+                 text-decoration:underline;text-decoration-color:#6b5c3e;
+                 text-underline-offset:2px;
+                 -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  #bilanzGruss a:hover{color:#ffd97a;text-decoration-color:#f0c060}
+  @media (max-height:430px){ #bilanzGruss{font-size:7px;padding:2px 8px 3px} }
   /* Sehr flache Fenster — Handy quer mit sichtbarer Adressleiste — haben unten
      kaum Platz. Dann rückt die Bilanz enger zusammen, statt sich unter die
      Bedienleiste zu schieben. */
@@ -384,7 +405,7 @@
     <canvas id="cv" width="480" height="300"></canvas>
     <div id="labels"></div>
     <div id="coach"></div>
-    <div id="bilanz"><div id="bilanzKopf"></div><div id="bilanzGrid"></div><div id="bilanzSumme"></div></div>
+    <div id="bilanz"><div id="bilanzKopf"></div><div id="bilanzGrid"></div><div id="bilanzSumme"></div><div id="bilanzGruss"></div></div>
     <div id="veil" class="on">
       <h1>RADLTOUR</h1>
       <p>Ein Tag an der Isar.<br>
@@ -1414,7 +1435,9 @@ function zoneAus(){
    fassen. Nur die Bedienleiste und die Overlays bleiben ausgenommen, sonst
    würde jeder Knopfdruck zugleich am Lenker ziehen. */
 function uiTreffer(t){
-  return !!(t&&t.closest&&t.closest('#ui,#heft,#lupe,#dreh,#home,#veil'));
+  /* #bilanzGruss ist die einzige anklickbare Stelle der Schlussbilanz — sonst
+     zählte der Tipper auf den Link zugleich als Tritt in die Pedale. */
+  return !!(t&&t.closest&&t.closest('#ui,#heft,#lupe,#dreh,#home,#veil,#bilanzGruss'));
 }
 window.addEventListener('pointerdown',e=>{
   if(uiTreffer(e.target)) return;
@@ -4396,6 +4419,7 @@ const TXT={
   von:' von ', komplett:'komplett',
   gesamt:(n)=>'Insgesamt '+n+' von '+SPECIES.length+' Arten.',
   heft_voll:'Das Sammelheftchen ist voll.',
+  gruss:'Danke fürs Mitradeln. Sag Servus:',
   w_fehlend:'Fehlende sammeln', w_fehlend_s:(n)=>n+' Arten offen',
   w_neu:'Nochmal neu', w_neu_s:'von vorn losfahren',
   w_teilen:'Teilen', w_teilen_s:'einem Spezi schicken',
@@ -4478,6 +4502,7 @@ const TXT={
   von:' of ', komplett:'complete',
   gesamt:(n)=>n+' of '+SPECIES.length+' species altogether.',
   heft_voll:'The notebook is full.',
+  gruss:'Thanks for the ride. Say hi:',
   w_fehlend:'Collect the rest', w_fehlend_s:(n)=>n+' species missing',
   w_neu:'Ride again', w_neu_s:'start from the top',
   w_teilen:'Share', w_teilen_s:'send it to a friend',
@@ -4553,12 +4578,22 @@ function zeigeBilanz(an,t){
     const sum=z[z.length-1], se=document.getElementById('bilanzSumme');
     se.textContent=sum.t+(sum.extra?'  '+sum.extra:'');
     se.classList.toggle('voll',!!sum.gold);
+    const gr=document.getElementById('bilanzGruss');
+    gr.textContent=T('gruss')+' ';
+    const a=document.createElement('a');
+    a.href='https://www.instagram.com/kolerikkevin/';
+    a.target='_blank'; a.rel='noopener';
+    a.textContent='@kolerikkevin';
+    gr.appendChild(a);
   }
   const da=i=>t>BILANZ_AB+i*BILANZ_TAKT;
   document.getElementById('bilanzKopf').style.opacity=da(0)?1:0;
   const felder=document.getElementById('bilanzGrid').children;
   for(let i=0;i<felder.length;i++) felder[i].style.opacity=da(i+1)?1:0;
   document.getElementById('bilanzSumme').style.opacity=da(z.length-1)?1:0;
+  /* Der Gruß kommt zuletzt, einen Takt nach der Summe — erst ist die Bilanz
+     fertig, dann meldet sich der, der's gebaut hat. */
+  document.getElementById('bilanzGruss').style.opacity=da(z.length)?1:0;
 }
 function bilanzFertig(){ return G.endT > BILANZ_AB + zeilenBilanz().length*BILANZ_TAKT + 1.2; }
 
