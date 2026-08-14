@@ -3081,7 +3081,7 @@ function spBruecke(x,y,u,seed){
      fällt — sonst rechnet sie beim Durchfahren tausend Streben, die
      kilometerweit außerhalb liegen. */
   const halb=11.4;                              // so weit reicht der Träger
-  const hangAb=halb-1.6;                        // hier beginnt der Waldhang
+  const hangAb=halb-1.5;                        // hier steht das Widerlager
   const vonS=Math.max(-halb,(0-x)/u-0.6), bisS=Math.min(halb,(W-x)/u+0.6);
   if(bisS<=vonS) return;
   const abS=k=>Math.ceil((vonS-(-halb))/k)*k+(-halb);   // erster Schritt im Bild
@@ -3179,26 +3179,27 @@ function spBruecke(x,y,u,seed){
      was dahinter liegt, geht niemanden etwas an. Er wird nach dem Zug gemalt,
      damit der wirklich darin verschwindet statt davor zu enden. */
   {
-    const ERDE=['#1e331c','#26401f'], LAUB=['#31532c','#274224','#3b6234'];
+    /* Wie endet eine Brücke, ohne abzubrechen? Zwei Versuche gingen daneben:
+       ein Stapel Rechtecke sah aus wie ein olivgrüner Karton vor der
+       Landschaft, ein Haufen Baumkronen wie graugrüne Seifenblasen. Beides
+       wollte Wald malen, den der Hintergrund an dieser Stelle schon gemalt
+       hat. Jetzt steht dort, was in echt dort steht: das Widerlager. Ein
+       Betonklotz, aus dem der Träger kommt — dieselbe Farbe wie die Pfeiler,
+       nur breiter. Damit hat die Brücke ein Ende statt eines Abrisses, und
+       der Zug verschwindet dahinter. */
     for(const seite of [-1,1]){
       const kante=seite*hangAb;
-      if(seite<0 && kante>bisS+1) continue;
-      if(seite>0 && kante<vonS-1) continue;
-      // der Erdkörper: ein Keil, der vom Tal nach außen ansteigt
-      for(let q=0;q<10;q++){
-        const tief=q/9;                                   // 0 = an der Kante, 1 = außen
-        const bx=kante+seite*tief*3.6;
-        const oben=unter-0.18-tief*0.80;                  // draußen ist der Hang höher
-        B(seite<0?bx-0.42:bx, oben, 0.42, -oben, ERDE[q%2]);
-      }
-      // und der Wald darauf — Kuppen statt Kanten
-      for(let q=0;q<8;q++){
-        const tief=q/7;
-        const cx=kante+seite*(0.20+tief*3.3);
-        const r=0.40+((q*29)%4)*0.11;
-        const cy=unter-0.26-tief*0.82-r*0.45;
-        oval(x+cx*u, y+cy*u, r*u, r*0.88*u, LAUB[q%3]);
-      }
+      if(seite<0 && kante>bisS+1.6) continue;
+      if(seite>0 && kante<vonS-1.6) continue;
+      /* Der Klotz sitzt am äußersten Ende des Trägers, nicht davor — sonst
+         ragt hinter ihm noch ein Stück Fahrbahn ins Nichts. */
+      const w2=1.5, links=seite<0?-halb:halb-w2;
+      bodenSchatten(x+(links+w2/2)*u,y,u,w2*0.8);
+      B(links, unter-0.34, w2, -(unter-0.34), BETON);          // der Klotz
+      B(links, unter-0.34, w2*0.22, -(unter-0.34), '#c6c0b3');  // Lichtkante
+      B(links+w2*0.78, unter-0.34, w2*0.22, -(unter-0.34), BETON_S);
+      B(links-0.08, unter-0.40, w2+0.16, 0.10, '#c9c3b6');      // Auflagerbank oben
+      B(links-0.08, unter-0.30, w2+0.16, 0.05, STAHL_S);        // Schattenfuge
     }
   }
 }
