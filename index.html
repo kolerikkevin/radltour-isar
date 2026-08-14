@@ -1603,8 +1603,9 @@ addSprite(ZOO_I+11,'zootier',-2.85,{h:0,v:1});          // Löwe
 /* Der Affe sitzt in genau dem Baum, der hier ohnehin steht (Segment +13,
    Offset -3,59) — auf gut zwei Wegbreiten Höhe, also im unteren Geäst. */
 addSprite(ZOO_I+13,'zootier',-3.59,{h:2.05,v:2});
-/* Gehört wird der Affe genau da, wo die Tiere anfangen. */
-if(segments[ZOO_I+2]) segments[ZOO_I+2].affenruf=1;
+/* Gehört wird der Affe, bevor man auf Höhe des Hauses ist: Der Ruf soll
+   der Grund sein, warum man hinschaut, nicht die Bestätigung danach. */
+if(segments[ZOO_I-10]) segments[ZOO_I-10].affenruf=1;
 for(let k=-24;k<=8;k++){          // freie Sicht, Seite wie beim Kiosk erklärt
   const s=segments[ZOO_I+k]; if(!s) continue;
   s.sprites=s.sprites.filter(sp=>!(sp.offset>0&&sp.offset<7&&(sp.type==='bgtree'||sp.type==='reed'||sp.type==='deko')));
@@ -3072,7 +3073,18 @@ function spBruecke(x,y,u,seed){
      hoch genug, dass man den Kopf hebt, niedrig genug, dass man sie kommen
      sieht. Beim Durchfahren zieht sie ohnehin nach oben aus dem Bild. */
   const unter=-2.02, dick=0.34;                 // Unterkante und Höhe des Trägers
-  const halb=6.2;                               // so weit reicht der Träger ins Bild
+  /* Die Brücke hörte früher gut sechs Wegbreiten neben dem Weg einfach auf —
+     ein Träger, der in der Luft endet. In echt spannt sie über das ganze
+     Isartal und läuft auf beiden Seiten in den bewaldeten Hang. Sie reicht
+     deshalb jetzt fast doppelt so weit, und an beiden Enden steht der Hang,
+     in dem sie verschwindet. Gezeichnet wird trotzdem nur, was ins Bild
+     fällt — sonst rechnet sie beim Durchfahren tausend Streben, die
+     kilometerweit außerhalb liegen. */
+  const halb=11.4;                              // so weit reicht der Träger
+  const hangAb=halb-1.6;                        // hier beginnt der Waldhang
+  const vonS=Math.max(-halb,(0-x)/u-0.6), bisS=Math.min(halb,(W-x)/u+0.6);
+  if(bisS<=vonS) return;
+  const abS=k=>Math.ceil((vonS-(-halb))/k)*k+(-halb);   // erster Schritt im Bild
   // Pfeiler — schlanke Betonstelen, oben leicht verjüngt
   for(const px of [-3.05,3.05]){
     bodenSchatten(x+px*u,y,u,0.34);
@@ -3083,36 +3095,34 @@ function spBruecke(x,y,u,seed){
   }
   /* Die Großhesseloher hat zwei Ebenen, und genau das macht sie aus: unten,
      im Fachwerk selbst, läuft der Fußweg — auf beiden Seiten mit Maschendraht
-     zugehängt, damit niemand in die Isar schaut, der das nicht sollte. Oben
-     drauf liegt die Bahnstrecke. Vorher war hier nur ein Träger mit einer
-     Platte, und der Gitterteil fehlte ganz. */
+     zugehängt. Oben drauf liegt die Bahnstrecke. */
   // 1) Fußgängerebene: Maschendraht zwischen den Gurten
   {
     const ga=ctx.globalAlpha;
     ctx.globalAlpha=ga*0.40;
-    B(-halb,unter+0.04,halb*2,dick-0.09,'#8e8a80');          // die Fläche des Netzes
+    B(vonS,unter+0.04,bisS-vonS,dick-0.09,'#8e8a80');        // die Fläche des Netzes
     ctx.globalAlpha=ga;
     const m=Math.max(1,Math.round(u*0.022));
     if(u*0.13>=2){                                            // Maschen erst zeigen, wenn sie tragen
       ctx.globalAlpha=ga*0.55;
-      for(let k=-halb;k<=halb;k+=0.13)
+      for(let k=abS(0.13);k<=bisS;k+=0.13)
         R(x+k*u-m/2, y+(unter+0.04)*u, m, (dick-0.09)*u, '#57544e');
       for(let q=0.10;q<dick-0.09;q+=0.11)
-        R(x-halb*u, y+(unter+0.04+q)*u, halb*2*u, m, '#57544e');
+        R(x+vonS*u, y+(unter+0.04+q)*u, (bisS-vonS)*u, m, '#57544e');
       ctx.globalAlpha=ga;
     }
-    B(-halb,unter+dick-0.10,halb*2,0.05,'#9a9488');           // der Gehweg darunter
+    B(vonS,unter+dick-0.10,bisS-vonS,0.05,'#9a9488');         // der Gehweg darunter
   }
   // 2) der Fachwerkträger: Ober- und Untergurt, Pfosten, Diagonalen
-  B(-halb,unter,halb*2,0.10,STAHL_H);
-  B(-halb,unter+dick-0.08,halb*2,0.09,STAHL);
+  B(vonS,unter,bisS-vonS,0.10,STAHL_H);
+  B(vonS,unter+dick-0.08,bisS-vonS,0.09,STAHL);
   /* Fachwerk aus Rechtecken statt aus Linien: ctx.stroke() legt die Linie
      mittig um die Koordinate und bekommt bei krummer Breite weiche Ränder —
      genau das, was dieses Spiel nirgends hat. Die Diagonalen entstehen als
      Treppe aus kurzen Klötzchen, das ist die 16-Bit-Lösung. */
   const st=Math.max(1,Math.round(u*0.038));
   const stufen=Math.max(2,Math.round(dick*u/st));
-  for(let k=-halb;k<=halb;k+=0.42){
+  for(let k=abS(0.42);k<=bisS;k+=0.42){
     R(x+k*u-st/2, y+unter*u, st, dick*u, STAHL);                  // Pfosten
     for(let s2=0;s2<stufen;s2++){
       const f=s2/stufen, xx=x+(k+0.42*f)*u, yy=y+(unter+dick)*u-(dick*u)*f;
@@ -3120,22 +3130,26 @@ function spBruecke(x,y,u,seed){
       R(x+(k+0.42*f)*u-st/2, y+unter*u+(dick*u)*f-st/2, st, st, STAHL);   // und hinauf
     }
   }
-  // 3) Bahnebene obendrauf: Platte, Gleis, Geländer, Fahrleitung
-  B(-halb,unter-0.16,halb*2,0.17,BETON);
-  B(-halb,unter-0.16,halb*2,0.05,'#c9c3b6');
-  B(-halb,unter+dick-0.02,halb*2,0.06,STAHL_S);                // Schatten unter dem Träger
-  B(-halb,unter-0.185,halb*2,0.028,'#7a6f5e');                 // Schotterkante
-  for(let k=-halb;k<=halb;k+=0.30) B(k,unter-0.30,0.035,0.15,STAHL_H);        // Geländerstäbe
-  B(-halb,unter-0.32,halb*2,0.045,STAHL_H);
+  // 3) Bahnebene obendrauf: Platte, Schotter, Geländer, Fahrleitung
+  B(vonS,unter-0.16,bisS-vonS,0.17,BETON);
+  B(vonS,unter-0.16,bisS-vonS,0.05,'#c9c3b6');
+  B(vonS,unter+dick-0.02,bisS-vonS,0.06,STAHL_S);              // Schatten unter dem Träger
+  B(vonS,unter-0.185,bisS-vonS,0.028,'#7a6f5e');               // Schotterkante
+  for(let k=abS(0.30);k<=bisS;k+=0.30) B(k,unter-0.30,0.035,0.15,STAHL_H);   // Geländerstäbe
+  B(vonS,unter-0.32,bisS-vonS,0.045,STAHL_H);
   // Fahrleitungsmasten
-  for(let k=-halb+0.9;k<=halb;k+=2.6){ B(k,unter-0.95,0.05,0.66,STAHL); B(k-0.22,unter-0.95,0.5,0.045,STAHL); }
+  for(let k=abS(2.6)+0.9-2.6;k<=bisS;k+=2.6){
+    if(k<vonS-0.6) continue;
+    B(k,unter-0.95,0.05,0.66,STAHL); B(k-0.22,unter-0.95,0.5,0.045,STAHL);
+  }
   /* Und alle paar Sekunden fährt oben ein Zug durch. Über die Brücke läuft die
      Strecke ins Oberland — dort ist die Bayerische Oberlandbahn unterwegs, und
      die ist blau. Er stand früher fest auf der Brücke, was seltsam aussah:
-     Ein Zug, der hält, hält an einem Bahnsteig. Jetzt fährt er wirklich, alle
-     paar Sekunden einmal quer durchs Bild, und die Richtung wechselt. */
+     Ein Zug, der hält, hält an einem Bahnsteig. Jetzt fährt er wirklich, und
+     er kommt aus dem Hang heraus und verschwindet drüben wieder darin —
+     vorher rollte er am Ende des Trägers ein Stück durch die Luft. */
   {
-    const TAKT=13.0, FAHRT=4.4, WAGEN=3, lang=1.86, hoch=0.60;
+    const TAKT=13.0, FAHRT=5.6, WAGEN=3, lang=1.86, hoch=0.60;
     const ph=(G.t+(seed||0)*TAKT)%TAKT;
     if(ph<FAHRT){
       const f=ph/FAHRT;
@@ -3145,12 +3159,45 @@ function spBruecke(x,y,u,seed){
       const zx=links ? -halb-zug+f*weg : halb+zug-f*weg-zug;
       for(let w=0;w<WAGEN;w++){
         const wx=zx+w*(lang+0.06);
-        if(wx>halb||wx+lang<-halb) continue;                   // außerhalb des Trägers nicht malen
-        B(wx,unter-0.16-hoch,lang,hoch,'#24528f');             // BOB-Blau
-        B(wx,unter-0.16-hoch,lang,0.10,'#3f79c8');             // Lichtkante oben
-        B(wx,unter-0.30,lang,0.13,'#eceff4');                  // helles Band unter den Fenstern
-        B(wx,unter-0.17,lang,0.04,'#1b3a66');                  // Schürze
-        for(let fz=0;fz<5;fz++) B(wx+0.16+fz*0.34,unter-0.10-hoch,0.24,0.22,'#2b3c4e');
+        /* Auf den Träger beschneiden: Ein Wagen, der halb übersteht, wurde
+           vorher trotzdem ganz gemalt und hing im Nichts. */
+        const a=Math.max(wx,-halb), b2=Math.min(wx+lang,halb);
+        if(b2<=a) continue;
+        B(a,unter-0.16-hoch,b2-a,hoch,'#24528f');              // BOB-Blau
+        B(a,unter-0.16-hoch,b2-a,0.10,'#3f79c8');              // Lichtkante oben
+        B(a,unter-0.30,b2-a,0.13,'#eceff4');                   // helles Band
+        B(a,unter-0.17,b2-a,0.04,'#1b3a66');                   // Schürze
+        for(let fz=0;fz<5;fz++){
+          const fx=wx+0.16+fz*0.34;
+          if(fx<a||fx+0.24>b2) continue;
+          B(fx,unter-0.10-hoch,0.24,0.22,'#2b3c4e');
+        }
+      }
+    }
+  }
+  /* Zum Schluss der Hang: An beiden Enden läuft die Brücke in den Wald, und
+     was dahinter liegt, geht niemanden etwas an. Er wird nach dem Zug gemalt,
+     damit der wirklich darin verschwindet statt davor zu enden. */
+  {
+    const ERDE=['#1e331c','#26401f'], LAUB=['#31532c','#274224','#3b6234'];
+    for(const seite of [-1,1]){
+      const kante=seite*hangAb;
+      if(seite<0 && kante>bisS+1) continue;
+      if(seite>0 && kante<vonS-1) continue;
+      // der Erdkörper: ein Keil, der vom Tal nach außen ansteigt
+      for(let q=0;q<10;q++){
+        const tief=q/9;                                   // 0 = an der Kante, 1 = außen
+        const bx=kante+seite*tief*3.6;
+        const oben=unter-0.18-tief*0.80;                  // draußen ist der Hang höher
+        B(seite<0?bx-0.42:bx, oben, 0.42, -oben, ERDE[q%2]);
+      }
+      // und der Wald darauf — Kuppen statt Kanten
+      for(let q=0;q<8;q++){
+        const tief=q/7;
+        const cx=kante+seite*(0.20+tief*3.3);
+        const r=0.40+((q*29)%4)*0.11;
+        const cy=unter-0.26-tief*0.82-r*0.45;
+        oval(x+cx*u, y+cy*u, r*u, r*0.88*u, LAUB[q%3]);
       }
     }
   }
