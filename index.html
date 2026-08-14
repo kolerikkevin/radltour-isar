@@ -6076,9 +6076,21 @@ function renderEnding(dt){
       ctx.fillText(o.s,o.x+o.w/2,o.y+31);
     });
     if(G.teilHinweis>0){
-      ctx.globalAlpha=Math.min(1,G.teilHinweis);
-      ctx.font='bold 11px ui-monospace, Menlo, monospace'; ctx.fillStyle='#ffe9a8';
-      ctx.fillText(T('kopiert'),W/2,H-74);
+      /* Die Rückmeldung stand nackt vor dem Biergarten und war je nach
+         Hintergrund kaum zu lesen. Sie bekommt jetzt dieselbe Grundierung
+         wie die drei Felder darunter: dunkler Kasten, heller Rahmen. */
+      const s2=T('kopiert');
+      ctx.font='bold 11px ui-monospace, Menlo, monospace';
+      const bw2=Math.ceil(ctx.measureText(s2).width)+20, bh2=20;
+      const bx2=Math.round(W/2-bw2/2), by2=H-74-14;
+      const ga2=Math.min(1,G.teilHinweis);
+      ctx.globalAlpha=ga2*0.88; ctx.fillStyle='#170f08';
+      ctx.fillRect(bx2,by2,bw2,bh2);
+      ctx.globalAlpha=ga2; ctx.fillStyle='#ffd97a';
+      ctx.fillRect(bx2,by2,bw2,1); ctx.fillRect(bx2,by2+bh2-1,bw2,1);
+      ctx.fillRect(bx2,by2,1,bh2); ctx.fillRect(bx2+bw2-1,by2,1,bh2);
+      ctx.fillStyle='#ffe9a8';
+      ctx.fillText(s2,W/2,H-74);
       ctx.globalAlpha=1;
     }
   }
