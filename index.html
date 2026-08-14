@@ -5506,28 +5506,10 @@ function drawBiergarten(t,toOff){
     c.drawImage(IMG,0,0,IMG.naturalWidth,Math.round(IMG.naturalHeight*0.56)+2,
                 dx0+kipp,dy0+atem,w2,trenn+3);
     c.restore();
-    /* Der Sechzger-Schal liegt nicht auf dem Tisch, sondern um seinen Hals —
-       so, wie man ihn nach dem Kauf am Stadion eben trägt. Er hängt am
-       Oberkörper und macht dessen Atmen und Ausweichen mit, sonst würde er
-       beim Wespen-Schlenker in der Luft stehen bleiben. Die beiden Enden sind
-       unterschiedlich lang; gleich lang sähe aufgemalt aus. */
-    if(G.loot.indexOf('monstera')>=0){
-      const sx0=dx0+kipp, sy0=dy0+atem;
-      /* Kevins Pulli ist selber blau — ein blau-weißer Schal darauf verschwand
-         schlicht. Er ist deshalb weiß beherrscht, die blauen Streifen sind
-         breiter, und rundherum liegt eine dunkle Kante. */
-      const BL='#1f5fae', BD='#12386b', WS='#f4f8fd';
-      const streif=(x,y,w3,h3,ab)=>{
-        for(let yy=0;yy<h3;yy++)
-          P(x,y+yy,w3,1, (Math.floor((yy+ab)/7)%2)?BL:WS);
-        P(x,y,1,h3,BD); P(x+w3-1,y,1,h3,BD);       // seitliche Kante
-      };
-      P(sx0+12,sy0+54,48,12,BD);                   // dunkle Unterlage = Kontur
-      streif(sx0+13,sy0+55,46,10,0);               // Schlaufe über den Schultern
-      P(sx0+16,sy0+63,15,36,BD); P(sx0+38,sy0+63,15,29,BD);
-      streif(sx0+17,sy0+64,13,34,4);               // linkes Ende, länger
-      streif(sx0+39,sy0+64,13,27,1);               // rechtes Ende
-    }
+    /* Ein gezeichneter Schal um den Hals ging nicht auf: Kevins Sprite ist
+       ein fertiges Bild, und alles, was man darüberlegt, klebt davor statt
+       darum. Er bleibt deshalb ungetragen — dass er im Fanshop mitgenommen
+       wurde, steht im Sammelheftchen. */
     P(66,196,348,13,TISCH); P(66,196,348,3,TISCH_HI); P(66,207,348,2,TISCH_DK);
     /* Die Tischdecke liegt auf der Platte auf und hängt vorn über die Kante.
        Das Muster sind echte bayerische Wecken — auf die Spitze gestellte
@@ -5577,66 +5559,31 @@ function drawBiergarten(t,toOff){
   P(bx-5,by-70+br,10,2,'#a86a58');            // zufriedener Mund
   P(bx-7,by-71+br,2,2,'#a86a58'); P(bx+5,by-71+br,2,2,'#a86a58');
   }
-  /* Der Tisch am Ende ist die einzige Stelle, an der man die Beute in Ruhe
-     anschaut — vorher rauscht sie unterwegs vorbei. Sie war hier trotzdem so
-     klein, dass man Kaffee und Eis nicht auseinanderhalten konnte. Deshalb
-     stehen hier dieselben Sachen wie vorher, nur rund um zwei Drittel größer
-     gezeichnet; neu gebaut wird nichts. Heftchen und Radler bleiben, wie sie
-     waren — an denen lag es nie.
-
-     Die Plätze werden gerechnet statt gezählt: Jedes Ding bringt seine Breite
-     mit, die Reihe wird als Ganzes auf dem Tisch zentriert. Vorher lagen die
-     Sachen in festen Abständen und deckten sich gegenseitig zu. */
+  /* Auf dem Tisch steht nur, was immer dort stand: Kevins Radler und das
+     Sammelheftchen. Die eingesammelten Sachen lagen eine Weile daneben —
+     erst zu klein zum Erkennen, dann so groß, dass eine Kaffeetasse Kevin
+     bis zur Schulter reichte. Gezeichnete Miniaturen tragen diese Szene
+     nicht, und die gemalten Sprites der Fundstücke gibt es nur für die
+     Strecke, nicht für den Tisch. Was man mitgenommen hat, steht deshalb da,
+     wo Platz dafür ist: im Sammelheftchen unter „Mitgenommen". */
+  // Radler
+  const gx=bx+56, gy=196;
+  P(gx-12,gy-50,24,50,'#efe4c2');
+  P(gx-12,gy-32,24,32,'#e8b23a');
+  P(gx-12,gy-32,24,3,'#f4cc6a');
+  P(gx-12,gy-50,24,9,'#fdfbf2');
+  P(gx-12,gy-50, 4,50,'#fffaf0');
+  P(gx+8, gy-50, 3,50,'#cfc2a0');
+  /* Das Heftchen liegt neben dem Radler auf dem Tisch und glänzt leise —
+     man sieht, wo die Ausbeute wohnt, bevor es sich am Ende aufblättert. */
   {
-    const ly=196;
-    const BREIT={heft:36, radler:24, zeitung:34, kaffee:28, brezn:34, eis:24,
-                 spezi:17, bump:58};
-    /* Der Schal liegt nicht mehr auf dem Tisch — den trägt er jetzt. */
-    const beute=G.loot.filter(k=>k!=='monstera');
-    /* Das Radler stand zuerst mitten in der Reihe, also genau vor Kevins
-       Brust — und verdeckte damit den halben Schal. Jetzt steht es am rechten
-       Ende in Reichweite seiner Hand, und vor ihm liegt nur Flaches. */
-    const reihe=['heft'].concat(beute, ['radler']);
-    const LUFT=8;
-    const ges=reihe.reduce((s2,k)=>s2+(BREIT[k]||22),0)+LUFT*(reihe.length-1);
-    let lx=Math.round(240-ges/2);
-    for(const k of reihe){
-      const b=BREIT[k]||22, m=Math.round(lx+b/2);      // m = Mitte des Stücks
-      switch(k){
-        case 'heft':                                   // das Sammelheftchen
-          P(m-18,ly-13,36,13,'#8a7450'); P(m-18,ly-13,36,3,'#a8906a');
-          P(m-1,ly-13,2,13,'#6b5a3e');
-          P(m-14,ly-10,12,2,'#d8ccb0'); P(m+4,ly-10,12,2,'#d8ccb0');
-          P(m-14,ly-7,12,2,'#d8ccb0');  P(m+4,ly-7,12,2,'#d8ccb0');
-          { const gl=0.35+0.35*Math.sin(t*2.6);
-            c.globalAlpha=gl; O(m,ly-14,22,7,'#fff3b0'); c.globalAlpha=1; }
-          break;
-        case 'radler':                                 // Kevins Radler
-          P(m-12,ly-50,24,50,'#efe4c2');
-          P(m-12,ly-32,24,32,'#e8b23a');
-          P(m-12,ly-32,24,3,'#f4cc6a');
-          P(m-12,ly-50,24,9,'#fdfbf2');
-          P(m-12,ly-50, 4,50,'#fffaf0');
-          P(m+8, ly-50, 3,50,'#cfc2a0');
-          break;
-        case 'zeitung':  P(m-17,ly-20,34,20,'#e8e2d2'); P(m-17,ly-20,34,7,'#c8342c'); break;
-        case 'kaffee':   P(m-10,ly-31,20,31,'#f2ece0'); P(m-14,ly-35,28,6,'#6b5b48'); break;
-        case 'brezn':    O(m,ly-14,17,12,'#a56a2e');    O(m,ly-14,8.2,5.8,'#e8d9a8'); break;
-        case 'eis':      P(m-5,ly-20,10,20,'#d8a45c');  O(m,ly-27,12,10,'#f2c9d8'); break;
-        case 'spezi':                                  // die Halbe vom Kiosk
-          P(m-8,ly-28,17,28,'#4a2a18'); P(m-4,ly-35,9,7,'#4a2a18');
-          P(m-4,ly-38,9,3,'#e0b040');
-          P(m-8,ly-23,17,7,'#f0a028'); P(m-8,ly-16,17,6,'#d0407a');
-          break;
-        /* Die geklaute Schwelle liegt quer über dem Tisch — sie passt nirgends
-           hin, und genau das ist der Witz. */
-        case 'bump':
-          P(m-29,ly-16,58,16,'#2f2a24'); P(m-29,ly-20,58,4,'#8a7f6c');
-          P(m-16,ly-20,10,20,'#ded6c2'); P(m+9,ly-20,10,20,'#ded6c2');
-          break;
-      }
-      lx+=b+LUFT;
-    }
+    const hx=178, hy=196;
+    P(hx-14,hy-10,28,10,'#8a7450'); P(hx-14,hy-10,28,2,'#a8906a');
+    P(hx-1,hy-10,2,10,'#6b5a3e');
+    P(hx-11,hy-8,9,1,'#d8ccb0'); P(hx+3,hy-8,9,1,'#d8ccb0');
+    P(hx-11,hy-6,9,1,'#d8ccb0'); P(hx+3,hy-6,9,1,'#d8ccb0');
+    const gl=0.35+0.35*Math.sin(t*2.6);
+    c.globalAlpha=gl; O(hx,hy-11,17,6,'#fff3b0'); c.globalAlpha=1;
   }
   /* Die Begleitung im Biergarten, gemessen an Kevin: sein Sprite ist 155
      Pixel hoch und stellt gut 1,85 m dar — daraus folgt der Maßstab für alle.
